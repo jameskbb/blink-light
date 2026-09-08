@@ -1,0 +1,255 @@
+{
+  "device": {
+    "serial": "12ab34cd"
+  },
+  "calendar": {
+    "auto_watch_on_launch": true,
+    "available_color": "#00C853",
+    "busy_meeting_color": "#D50000",
+    "enabled": true,
+    "free_meeting_color": "#8E24AA",
+    "free_statuses": [
+      0
+    ],
+    "ignore_all_day": true,
+    "lookahead_minutes": 15,
+    "poll_seconds": 30,
+    "provider": "outlook",
+    "ten_minute_warning_color": "#FDD835",
+    "two_minute_warning_color": "#FB8C00",
+    "warning_count": 1,
+    "warning_off_ms": 120,
+    "warning_on_ms": 180
+  },
+  "chime": {
+    "catch_up_window_seconds": 300,
+    "color": "#FFFFFF",
+    "count": 1,
+    "enabled": true,
+    "minute": 0,
+    "off_ms": 400,
+    "on_ms": 400,
+    "respect_quiet_hours": true,
+    "secondary_color": "#000000"
+  },
+  "presets": {
+    "available": {
+      "color": "#00C853",
+      "fade_ms": 150
+    },
+    "calendar_free": {
+      "color": "#8E24AA",
+      "fade_ms": 150
+    },
+    "away": {
+      "color": "#2962FF",
+      "fade_ms": 200
+    },
+    "break": {
+      "color": "#00ACC1",
+      "fade_ms": 250
+    },
+    "busy": {
+      "color": "#D50000",
+      "fade_ms": 150
+    },
+    "focus": {
+      "color": "#FFB300",
+      "fade_ms": 250
+    },
+    "hydrate_due": {
+      "scene": "hydrate_due_scene"
+    },
+    "meeting_soon": {
+      "scene": "meeting_soon_scene"
+    },
+    "timer_done": {
+      "scene": "timer_done_scene"
+    }
+  },
+  "rules": [
+    {
+      "action": {
+        "preset": "timer_done"
+      },
+      "name": "timer-completed",
+      "when": {
+        "routine_phase": "completed"
+      }
+    },
+    {
+      "action": {
+        "preset": "away"
+      },
+      "name": "idle-away",
+      "when": {
+        "idle_seconds_gte": 600
+      }
+    }
+  ],
+  "routines": {
+    "hydrate": {
+      "completion_action": {
+        "preset": "hydrate_due"
+      },
+      "description": "45 minute hydration reminder.",
+      "phases": [
+        {
+          "action": {
+            "preset": "available"
+          },
+          "minutes": 45,
+          "name": "hydrate_wait"
+        }
+      ]
+    },
+    "long_break": {
+      "completion_action": {
+        "preset": "timer_done"
+      },
+      "description": "Longer 15 minute reset.",
+      "phases": [
+        {
+          "action": {
+            "preset": "break"
+          },
+          "minutes": 15,
+          "name": "long_break"
+        }
+      ]
+    },
+    "pomodoro": {
+      "completion_action": {
+        "preset": "timer_done"
+      },
+      "description": "25 minutes of focus followed by a 5 minute break.",
+      "phases": [
+        {
+          "action": {
+            "preset": "focus"
+          },
+          "minutes": 25,
+          "name": "focus"
+        },
+        {
+          "action": {
+            "preset": "break"
+          },
+          "minutes": 5,
+          "name": "short_break"
+        }
+      ]
+    },
+    "short_break": {
+      "completion_action": {
+        "preset": "timer_done"
+      },
+      "description": "Quick 5 minute reset.",
+      "phases": [
+        {
+          "action": {
+            "preset": "break"
+          },
+          "minutes": 5,
+          "name": "short_break"
+        }
+      ]
+    },
+    "stand": {
+      "completion_action": {
+        "preset": "meeting_soon"
+      },
+      "description": "60 minute stand-and-stretch reminder.",
+      "phases": [
+        {
+          "action": {
+            "preset": "available"
+          },
+          "minutes": 60,
+          "name": "stand_wait"
+        }
+      ]
+    }
+  },
+  "scenes": {
+    "hydrate_due_scene": {
+      "loop": true,
+      "steps": [
+        {
+          "color": "#26C6DA",
+          "seconds": 0.35
+        },
+        {
+          "color": "#000000",
+          "seconds": 1.4
+        }
+      ]
+    },
+    "meeting_soon_scene": {
+      "loop": true,
+      "steps": [
+        {
+          "color": "#FF8F00",
+          "seconds": 0.18
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.15
+        },
+        {
+          "color": "#FF8F00",
+          "seconds": 0.18
+        },
+        {
+          "color": "#000000",
+          "seconds": 1.4
+        }
+      ]
+    },
+    "timer_done_scene": {
+      "loop": true,
+      "steps": [
+        {
+          "color": "#FFFFFF",
+          "seconds": 0.15
+        },
+        {
+          "color": "#00C853",
+          "seconds": 0.15
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.18
+        },
+        {
+          "color": "#FFFFFF",
+          "seconds": 0.15
+        },
+        {
+          "color": "#00C853",
+          "seconds": 0.15
+        },
+        {
+          "color": "#000000",
+          "seconds": 1.0
+        }
+      ]
+    }
+  },
+  "settings": {
+    "default_action": {
+      "preset": "available"
+    },
+    "quiet_hours": {
+      "action": {
+        "off": true
+      },
+      "enabled": true,
+      "end": "07:00",
+      "start": "22:30"
+    },
+    "stop_turns_light_off": true,
+    "tick_seconds": 5,
+    "watchdog_millis": 8000
+  }
+}
