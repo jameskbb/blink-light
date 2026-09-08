@@ -1,0 +1,21 @@
+# Flash a blink(1) when a Herdr agent finishes or gets blocked.
+#
+# Install with:  herdr plugin link <this directory>
+# Verify with:   herdr plugin list
+#
+# Manifest fields and the event-hook schema come from Herdr's plugin docs:
+# https://herdr.dev/docs/plugins
+id = "blinklight.agent-status"
+name = "blink(1) agent status"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "Flash a blink(1) light when an agent finishes or needs attention."
+platforms = ["windows"]
+
+# Herdr fires this whenever a pane's agent changes state. The handler decides
+# which transitions are worth a flash - the hook itself cannot filter, so every
+# status change reaches the script and most of them are ignored.
+[[events]]
+on = "pane.agent_status_changed"
+command = ["wscript.exe", "handler.vbs"]
+platforms = ["windows"]

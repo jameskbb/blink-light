@@ -63,6 +63,10 @@ def merge_config(user: dict[str, Any], detected_serial: str | None = None) -> di
         if not isinstance(user["show"], dict):
             raise ConfigError("'show' must be an object.")
         base["show"] = _deep_merge(base["show"], user["show"])
+    if "notify" in user:
+        if not isinstance(user["notify"], dict):
+            raise ConfigError("'notify' must be an object.")
+        base["notify"] = _merge_named_section(base["notify"], user["notify"])
     for section in ("presets", "scenes", "routines"):
         if section in user:
             if not isinstance(user[section], dict):
@@ -80,7 +84,18 @@ def merge_config(user: dict[str, Any], detected_serial: str | None = None) -> di
 
 
 def validate_config(payload: dict[str, Any]) -> None:
-    for key in ("device", "calendar", "chime", "show", "presets", "scenes", "routines", "rules", "settings"):
+    for key in (
+        "device",
+        "calendar",
+        "chime",
+        "show",
+        "notify",
+        "presets",
+        "scenes",
+        "routines",
+        "rules",
+        "settings",
+    ):
         if key not in payload:
             raise ConfigError(f"Missing top-level key: {key}")
 
@@ -92,6 +107,10 @@ def validate_config(payload: dict[str, Any]) -> None:
     _validate_calendar(payload["calendar"])
     _validate_chime(payload["chime"])
 
+    if not isinstance(payload["notify"], dict):
+        raise ConfigError("'notify' must be an object.")
+    for name, action in payload["notify"].items():
+        _validate_action(action, f"notify.{name}")
     if not isinstance(payload["presets"], dict):
         raise ConfigError("'presets' must be an object.")
     if not isinstance(payload["scenes"], dict):
@@ -279,6 +298,8 @@ def _validate_action_references(payload: dict[str, Any]) -> None:
             walk(phase["action"], f"routines.{name}.phases[{index}].action")
         if "completion_action" in routine:
             walk(routine["completion_action"], f"routines.{name}.completion_action")
+    for name, action in payload["notify"].items():
+        walk(action, f"notify.{name}")
     for index, rule in enumerate(payload["rules"]):
         walk(rule["action"], f"rules[{index}].action")
     walk(payload["settings"]["default_action"], "settings.default_action")

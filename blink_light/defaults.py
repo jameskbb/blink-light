@@ -62,6 +62,25 @@ BUILTIN_PRESETS = {
 
 BUILTIN_SCENES = {
     "rainbow_swirl": rainbow_swirl_scene(),
+    # Notification scenes are short and non-looping: they must finish on their
+    # own so the light returns to whatever the watcher was showing.
+    "agent_done_scene": {
+        "loop": False,
+        "repeat": 2,
+        "steps": [
+            {"color": "#00E5FF", "seconds": 0.18},
+            {"color": "#00FF7F", "seconds": 0.18},
+            {"color": "#000000", "seconds": 0.22},
+        ],
+    },
+    "agent_blocked_scene": {
+        "loop": False,
+        "repeat": 3,
+        "steps": [
+            {"color": "#FF6D00", "seconds": 0.22},
+            {"color": "#000000", "seconds": 0.20},
+        ],
+    },
     "timer_done_scene": {
         "loop": True,
         "steps": [
@@ -168,6 +187,11 @@ BUILTIN_CHIME = {
     "respect_quiet_hours": True,
 }
 
+BUILTIN_NOTIFY = {
+    "agent_done": {"scene": "agent_done_scene"},
+    "agent_blocked": {"scene": "agent_blocked_scene"},
+}
+
 BUILTIN_SHOW = {
     "enabled": True,
     "at": "17:00",
@@ -202,6 +226,7 @@ def default_config(serial: str | None = None) -> dict:
         "calendar": deepcopy(BUILTIN_CALENDAR),
         "chime": deepcopy(BUILTIN_CHIME),
         "show": deepcopy(BUILTIN_SHOW),
+        "notify": deepcopy(BUILTIN_NOTIFY),
         "presets": deepcopy(BUILTIN_PRESETS),
         "scenes": deepcopy(BUILTIN_SCENES),
         "routines": deepcopy(BUILTIN_ROUTINES),

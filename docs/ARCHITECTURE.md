@@ -25,6 +25,17 @@ The scheduler loop and the watcher are separate processes with separate jobs. Th
 watcher paints *ongoing state* (are you in a meeting?). The scheduler fires
 *moments* (it is 5pm).
 
+There is a third path with no process of its own: **notifications**. An external
+tool runs `notify run <event>`, the light flashes, the process exits. No slot, no
+dedupe, no daemon — see [Herdr](HERDR.md) for the shipped example. Three kinds of
+trigger, then:
+
+| | Trigger | Dedupe |
+|---|---|---|
+| Scheduler | A time arrives | Once per slot |
+| Watcher | State changed | Once per distinct action |
+| Notify | Someone asked | None — every call flashes |
+
 ## How the scheduler loop actually works
 
 `run_chime_loop` in `blink_light/chime.py`:
@@ -134,6 +145,7 @@ What actually costs something is *per-wake work*, and only some kinds:
 | Another scheduled moment (a 9am standup pulse, a Friday show) | Scheduler loop, next to the show | **Near zero.** One more date check and file read per minute. |
 | Reacting to system state continuously | The watcher | Moderate — 5s ticks, and `psutil` enumerates processes each one. |
 | Anything network, COM, or subprocess (Outlook, an HTTP API, `git`) | The watcher, behind a cache | **This is the real cost.** Outlook COM is why the watcher caches its calendar poll to every 30s rather than every tick. |
+| Reacting to an event from another tool | A `notify` event plus that tool's own hook | **Zero standing cost.** Nothing polls; the other tool pays for the trigger. |
 
 ### The rule of thumb
 
@@ -163,6 +175,8 @@ tick. The watcher's own chain, highest first:
 |---|---|
 | `blink_light/chime.py` | Hourly chime, the scheduler loop, scheduled-task management |
 | `blink_light/show.py` | Daily show — same slot/dedupe shape as the chime |
+| `blink_light/notify.py` | Named one-shot notifications; the integration entry point |
+| `integrations/herdr/` | Herdr plugin manifest and event handler |
 | `blink_light/watcher.py` | The state loop and its precedence chain |
 | `blink_light/device.py` | blink(1) I/O, scene playback, on-device patterns |
 | `blink_light/config.py` | Merge + validation, including the show's duration cap |

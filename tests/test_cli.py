@@ -186,6 +186,35 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertTrue(json.loads(output)["fired"])
 
+    def test_notify_run_fires_the_named_event(self) -> None:
+        self._run(["config", "init"])
+        exit_code, output, _ = self._run(["notify", "run", "agent_done"])
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertTrue(payload["notified"])
+        self.assertEqual(payload["action"], {"scene": "agent_done_scene"})
+        self.assertFalse(FakeController.applied_actions[-1]["persistent"])
+
+    def test_notify_run_rejects_an_unknown_event(self) -> None:
+        self._run(["config", "init"])
+        exit_code, _, error = self._run(["notify", "run", "nope"])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Unknown notify event", error)
+
+    def test_notify_run_can_stay_quiet_about_unknown_events(self) -> None:
+        self._run(["config", "init"])
+        exit_code, output, error = self._run(["notify", "run", "nope", "--quiet-missing"])
+        self.assertEqual(exit_code, 0)
+        self.assertFalse(json.loads(output)["notified"])
+        self.assertEqual(error, "")
+
+    def test_notify_list_shows_resolved_actions(self) -> None:
+        self._run(["config", "init"])
+        exit_code, output, _ = self._run(["notify", "list"])
+        self.assertEqual(exit_code, 0)
+        events = json.loads(output)["events"]
+        self.assertEqual(events["agent_done"], {"scene": "agent_done_scene"})
+
     def test_chime_status_reports_the_next_slot(self) -> None:
         self._run(["config", "init"])
         exit_code, output, _ = self._run(["chime", "status"])

@@ -32,6 +32,14 @@
     "respect_quiet_hours": true,
     "secondary_color": "#000000"
   },
+  "notify": {
+    "agent_blocked": {
+      "scene": "agent_blocked_scene"
+    },
+    "agent_done": {
+      "scene": "agent_done_scene"
+    }
+  },
   "show": {
     "at": "17:00",
     "catch_up_window_seconds": 300,

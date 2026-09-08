@@ -2,7 +2,7 @@
 
 Windows-first [`blink(1)`](https://blink1.thingm.com/) utility with a self-bootstrapping batch launcher, an hourly chime, a daily light show, one-shot light controls, Outlook-calendar watching, timers, local rule watching, persistent overrides, and opt-in startup registration.
 
-**Docs:** [Architecture](docs/ARCHITECTURE.md) — how the scheduling works and what it costs to extend · [Runbook](docs/RUNBOOK.md) — setup, verification, troubleshooting, teardown.
+**Docs:** [Architecture](docs/ARCHITECTURE.md) — how the scheduling works and what it costs to extend · [Runbook](docs/RUNBOOK.md) — setup, verification, troubleshooting, teardown · [Herdr](docs/HERDR.md) — flash the light when an AI agent finishes.
 
 ## Hourly Chime (start here)
 
@@ -56,6 +56,35 @@ at something longer and the CLI refuses it with the measured duration.
 ```bat
 blink-light.bat show now
 blink-light.bat show now --force
+```
+
+## Notifications (integration entry point)
+
+One-shot named flashes for external tools. No slots, no dedupe — it fires when you
+call it.
+
+```bat
+blink-light.bat notify list
+blink-light.bat notify run agent_done
+```
+
+Events live under `notify` in `blink-light.json`, so an integration names an event
+and the config decides how it looks:
+
+```json
+"notify": {
+  "agent_done": { "scene": "agent_done_scene" },
+  "agent_blocked": { "scene": "agent_blocked_scene" }
+}
+```
+
+Add `--quiet-missing` for callers that must not fail when an event is undefined.
+
+**Shipped integration:** [Herdr](docs/HERDR.md) — flashes when an AI agent finishes
+or gets blocked.
+
+```bat
+herdr plugin link <repo>\integrations\herdr
 ```
 
 ## Start It At Boot
@@ -220,6 +249,7 @@ The repo-local config file is `blink-light.json`. It contains:
 - `device.serial`
 - `chime`
 - `show`
+- `notify`
 - `presets`
 - `scenes`
 - `routines`
@@ -264,6 +294,8 @@ underlying state on the next tick.
 | `blink-light.json` | Config. |
 | `blink_light/chime.py` | Hourly chime: slots, dedupe, scheduler loop, scheduled-task management. |
 | `blink_light/show.py` | Daily light show, same slot/dedupe shape as the chime. |
+| `blink_light/notify.py` | Named one-shot notifications for external tools. |
+| `integrations/herdr/` | Herdr plugin: manifest plus its event handler. |
 | `blink_light/watcher.py` | Background loop, action precedence. |
 | `blink_light/cli.py` | Argument parsing and command dispatch. |
 | `docs/` | Architecture and runbook. |

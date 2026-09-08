@@ -24,6 +24,7 @@ from .chime import (
     uninstall_scheduled_task,
 )
 from .defaults import default_config
+from .notify import NotifyError, fire_notify, list_events, resolve_event
 from .show import fire_show, maybe_fire_show, show_status
 from .device import BlinkDeviceController, DeviceError
 from .paths import AppPaths, build_paths, ensure_runtime_dirs
@@ -307,6 +308,20 @@ def _build_parser() -> argparse.ArgumentParser:
     chime_sub.add_parser("status", help="Show chime config, last fire, and next slot.")
     chime_sub.add_parser("install", help="Register the hourly Windows scheduled task.")
     chime_sub.add_parser("uninstall", help="Remove the hourly Windows scheduled task.")
+
+    notify_parser = subparsers.add_parser(
+        "notify",
+        help="Fire a named one-shot notification. The integration entry point.",
+    )
+    notify_sub = notify_parser.add_subparsers(dest="notify_command", required=True)
+    notify_sub.add_parser("list", help="List configured notify events.")
+    notify_run = notify_sub.add_parser("run", help="Fire a notify event now.")
+    notify_run.add_argument("event")
+    notify_run.add_argument(
+        "--quiet-missing",
+        action="store_true",
+        help="Exit 0 when the event is unknown. For integrations that must not fail loudly.",
+    )
 
     show_parser = subparsers.add_parser("show", help="Daily light show (rainbow swirl at 17:00).")
     show_sub = show_parser.add_subparsers(dest="show_command", required=True)
@@ -628,6 +643,30 @@ def main(
                 )
                 return 0
 
+        if args.command == "notify":
+            if args.notify_command == "list":
+                _print_json(
+                    stream,
+                    {
+                        "events": {
+                            name: resolve_event(config, name) for name in list_events(config)
+                        }
+                    },
+                )
+                return 0
+            if args.notify_command == "run":
+                try:
+                    payload = fire_notify(config, args.event, controller_cls=controller_cls)
+                except NotifyError:
+                    # An integration firing an event this config does not define
+                    # should be able to stay silent rather than spam failures.
+                    if args.quiet_missing:
+                        _print_json(stream, {"notified": False, "event": args.event, "reason": "unknown-event"})
+                        return 0
+                    raise
+                _print_json(stream, payload)
+                return 0
+
         if args.command == "show":
             if args.show_command == "status":
                 _print_json(stream, show_status(config, resolved_paths, now_factory()))
@@ -691,6 +730,6 @@ def main(
                 return 0
 
         raise RuntimeError(f"Unsupported command: {args.command}")
-    except (ConfigError, DeviceError, RuntimeError, ValueError, KeyError) as exc:
+    except (ConfigError, DeviceError, NotifyError, RuntimeError, ValueError, KeyError) as exc:
         error_stream.write(f"error: {exc}\n")
         return 1
