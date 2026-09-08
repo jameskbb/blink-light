@@ -1,8 +1,68 @@
 # blink-light
 
-Windows-first [`blink(1)`](https://blink1.thingm.com/) utility with a self-bootstrapping batch launcher, an hourly chime, a daily light show, one-shot light controls, Outlook-calendar watching, timers, local rule watching, persistent overrides, and opt-in startup registration.
+Windows-first [`blink(1)`](https://blink1.thingm.com/) utility. Turns a USB light on your desk into an ambient status display: standup alerts, an hourly chime, a daily light show, AI-agent notifications, Outlook-calendar colours, timers, and local rules — with a self-bootstrapping batch launcher and opt-in startup registration.
 
 **Docs:** [Architecture](docs/ARCHITECTURE.md) — how the scheduling works and what it costs to extend · [Runbook](docs/RUNBOOK.md) — setup, verification, troubleshooting, teardown · [Herdr](docs/HERDR.md) — flash the light when an AI agent finishes.
+
+---
+
+## What the light does
+
+Everything currently configured, in one place. Values are from
+[`blink-light.json`](blink-light.json).
+
+### On a schedule
+
+| When | What | Colour | Length | Preview it |
+| --- | --- | --- | --- | --- |
+| **08:13** daily | Standup in 2 minutes — 3 flashes | 🔴 `#FF0000` | 0.96s | `alarm test standup_warning` |
+| **08:15** daily | Standup now — 6 faster flashes | 🔴 `#FF0000` | 1.44s | `alarm test standup_now` |
+| **:00** every hour | One white breath | ⚪ `#FFFFFF` | 0.8s | `chime test` |
+| **17:00** daily | Rainbow swirl across both LEDs | 🌈 28 hues | 9.92s | `show test` |
+
+### When something happens
+
+| Trigger | What | Colour | Length | Preview it |
+| --- | --- | --- | --- | --- |
+| AI agent finishes ([Herdr](docs/HERDR.md)) | 2 slow breaths | 🟠 `#6F3A2B` — Claude orange at 50% | 1.80s | `notify run agent_done` |
+| AI agent blocked | 3 quicker breaths | 🔴 `#801E00` — dim red | 1.26s | `notify run agent_blocked` |
+
+### The resting colour (watcher only, opt-in)
+
+Only while `watch start` is running. This is the *background* state the light
+returns to; everything above plays on top of it.
+
+| Situation | Colour |
+| --- | --- |
+| Nothing scheduled | 🟢 `#00C853` green |
+| In a booked meeting | 🔴 `#D50000` red |
+| In a meeting marked Free | 🟣 `#8E24AA` purple |
+| Meeting in 10 minutes | 🟡 `#FDD835` single blink |
+| Meeting in 2 minutes | 🟠 `#FB8C00` single blink |
+| Idle 10+ minutes | 🔵 `#2962FF` blue |
+
+### Quiet hours
+
+**22:30 – 07:00** the light is off, and the chime, show and alarms all stay
+silent. Each can opt out with `respect_quiet_hours: false`.
+
+Because 08:13 and 08:15 sit outside that window, the standup alerts are
+unaffected.
+
+### Check what is live right now
+
+```bat
+blink-light.bat alarm status
+blink-light.bat chime status
+blink-light.bat show status
+blink-light.bat notify list
+```
+
+Each prints `next_slot` and when it last fired, plus a `reason` when something is
+not going to fire. Nothing here fires twice for the same moment — see
+[Architecture](docs/ARCHITECTURE.md) for why.
+
+---
 
 ## Hourly Chime (start here)
 
