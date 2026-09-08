@@ -269,7 +269,7 @@
       "repeat": 6,
       "steps": [
         {
-          "color": "#FF0000",
+          "color": "#FFD700",
           "seconds": 0.12
         },
         {
@@ -283,7 +283,7 @@
       "repeat": 3,
       "steps": [
         {
-          "color": "#FF0000",
+          "color": "#FFD700",
           "seconds": 0.16
         },
         {

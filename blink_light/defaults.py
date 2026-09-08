@@ -39,6 +39,10 @@ AGENT_DONE_COLOR = scale_brightness(CLAUDE_ORANGE, NOTIFY_BRIGHTNESS)
 # as well as by rhythm.
 AGENT_BLOCKED_COLOR = scale_brightness("#FF3D00", NOTIFY_BRIGHTNESS)
 
+# Standup alerts. Full brightness, unlike the notification colours above: these
+# are meant to catch your eye across the room, not sit quietly in the corner.
+STANDUP_COLOR = "#FFD700"
+
 
 def rainbow_swirl_scene() -> dict:
     """A slow two-LED hue rotation that swells and settles. Under 10 seconds.
@@ -109,14 +113,13 @@ BUILTIN_SCENES = {
             {"color": "#000000", "seconds": 0.20},
         ],
     },
-    # Standup alerts. Full-brightness red on purpose: unlike the Herdr
-    # notification these are meant to be hard to miss. The two are told apart by
-    # urgency - a short warning, then an insistent one.
+    # Standup alerts. The two are told apart by urgency - a short warning, then
+    # an insistent one - rather than by colour, so they read as one pair.
     "standup_warning_scene": {
         "loop": False,
         "repeat": 3,
         "steps": [
-            {"color": "#FF0000", "seconds": 0.16},
+            {"color": STANDUP_COLOR, "seconds": 0.16},
             {"color": "#000000", "seconds": 0.16},
         ],
     },
@@ -124,7 +127,7 @@ BUILTIN_SCENES = {
         "loop": False,
         "repeat": 6,
         "steps": [
-            {"color": "#FF0000", "seconds": 0.12},
+            {"color": STANDUP_COLOR, "seconds": 0.12},
             {"color": "#000000", "seconds": 0.12},
         ],
     },

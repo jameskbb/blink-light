@@ -17,7 +17,12 @@ from blink_light.alarms import (
     should_fire,
 )
 from blink_light.config import ConfigError, merge_config, validate_config
-from blink_light.defaults import default_config, scene_duration_seconds
+from blink_light.defaults import (
+    STANDUP_COLOR,
+    default_config,
+    scale_brightness,
+    scene_duration_seconds,
+)
 from blink_light.paths import build_paths
 
 
@@ -54,11 +59,18 @@ class StandupAlarmTests(unittest.TestCase):
         self.assertEqual(find_alarm(self.config, "standup_warning")["at"], "08:13")
         self.assertEqual(find_alarm(self.config, "standup_now")["at"], "08:15")
 
-    def test_both_are_red(self) -> None:
+    def test_both_are_gold(self) -> None:
+        """One colour for both, so the pair reads as one thing."""
         scenes = self.config["scenes"]
         for name in ("standup_warning_scene", "standup_now_scene"):
             with self.subTest(scene=name):
-                self.assertEqual(scenes[name]["steps"][0]["color"], "#FF0000")
+                self.assertEqual(scenes[name]["steps"][0]["color"], STANDUP_COLOR)
+        self.assertEqual(STANDUP_COLOR, "#FFD700")
+
+    def test_standup_is_not_dimmed(self) -> None:
+        """Unlike the Herdr notification, these are meant to carry across a room."""
+        self.assertNotEqual(STANDUP_COLOR, scale_brightness(STANDUP_COLOR, 0.5))
+        self.assertEqual(STANDUP_COLOR, scale_brightness(STANDUP_COLOR, 1.0))
 
     def test_the_two_alerts_differ_in_urgency(self) -> None:
         scenes = self.config["scenes"]

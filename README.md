@@ -15,8 +15,8 @@ Everything currently configured, in one place. Values are from
 
 | When | What | Colour | Length | Preview it |
 | --- | --- | --- | --- | --- |
-| **08:13** daily | Standup in 2 minutes — 3 flashes | 🔴 `#FF0000` | 0.96s | `alarm test standup_warning` |
-| **08:15** daily | Standup now — 6 faster flashes | 🔴 `#FF0000` | 1.44s | `alarm test standup_now` |
+| **08:13** daily | Standup in 2 minutes — 3 flashes | 🟡 `#FFD700` gold | 0.96s | `alarm test standup_warning` |
+| **08:15** daily | Standup now — 6 faster flashes | 🟡 `#FFD700` gold | 1.44s | `alarm test standup_now` |
 | **:00** every hour | One white breath | ⚪ `#FFFFFF` | 0.8s | `chime test` |
 | **17:00** daily | Rainbow swirl across both LEDs | 🌈 28 hues | 9.92s | `show test` |
 
@@ -120,15 +120,16 @@ blink-light.bat show now --force
 
 ## Daily Alarms
 
-Named red flashes at wall-clock times. Two ship by default, for standup:
+Named flashes at wall-clock times. Two ship by default, for standup:
 
 | Name | Time | Light |
 | --- | --- | --- |
-| `standup_warning` | 08:13 | 3 red flashes |
-| `standup_now` | 08:15 | 6 faster red flashes |
+| `standup_warning` | 08:13 | 3 gold flashes |
+| `standup_now` | 08:15 | 6 faster gold flashes |
 
-Full-brightness red on purpose — unlike the Herdr notification these are meant to
-be hard to miss, and the two differ in urgency rather than colour.
+Full-brightness gold (`#FFD700`) on purpose — unlike the Herdr notification these
+are meant to catch your eye across the room, and the two differ in urgency rather
+than colour, so they read as one pair.
 
 ```bat
 blink-light.bat alarm status
