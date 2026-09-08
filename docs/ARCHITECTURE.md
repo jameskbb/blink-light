@@ -44,9 +44,14 @@ trigger, then:
 wake
 ├── chime due?   date math + read chime-state.json   → pulse if due
 ├── show due?    date math + read show-state.json    → play scene if due
-└── sleep  min(next chime slot, next show slot, 60s) + 0.5s
+├── alarms due?  date math + read alarm-state.json   → flash each that is due
+└── sleep  min(next chime, next show, next alarm, 60s) + 0.5s
          (in 2s slices, checking only for a stop request)
 ```
+
+The alarms line is the proof of the claim below about extension cost: adding two
+daily standup alerts cost one more file read per wake and no new process. Each
+effect is a cheap no-op away from its slot.
 
 Three consequences worth internalising:
 
@@ -142,7 +147,7 @@ What actually costs something is *per-wake work*, and only some kinds:
 | You want to add | Where it goes | Cost |
 |---|---|---|
 | A new condition on existing signals (idle, process running, file exists, time range, battery) | `rules` in `blink-light.json` | **Zero.** No code. |
-| Another scheduled moment (a 9am standup pulse, a Friday show) | Scheduler loop, next to the show | **Near zero.** One more date check and file read per minute. |
+| Another scheduled moment (a 9am pulse, a Friday show) | An entry in `alarms` | **Zero.** No code — this is what `alarms` is for. |
 | Reacting to system state continuously | The watcher | Moderate — 5s ticks, and `psutil` enumerates processes each one. |
 | Anything network, COM, or subprocess (Outlook, an HTTP API, `git`) | The watcher, behind a cache | **This is the real cost.** Outlook COM is why the watcher caches its calendar poll to every 30s rather than every tick. |
 | Reacting to an event from another tool | A `notify` event plus that tool's own hook | **Zero standing cost.** Nothing polls; the other tool pays for the trigger. |
@@ -175,6 +180,7 @@ tick. The watcher's own chain, highest first:
 |---|---|
 | `blink_light/chime.py` | Hourly chime, the scheduler loop, scheduled-task management |
 | `blink_light/show.py` | Daily show — same slot/dedupe shape as the chime |
+| `blink_light/alarms.py` | Named daily alarms; reuses the show's slot arithmetic |
 | `blink_light/notify.py` | Named one-shot notifications; the integration entry point |
 | `integrations/herdr/` | Herdr plugin manifest and event handler |
 | `blink_light/watcher.py` | The state loop and its precedence chain |

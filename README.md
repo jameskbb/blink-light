@@ -58,6 +58,59 @@ blink-light.bat show now
 blink-light.bat show now --force
 ```
 
+## Daily Alarms
+
+Named red flashes at wall-clock times. Two ship by default, for standup:
+
+| Name | Time | Light |
+| --- | --- | --- |
+| `standup_warning` | 08:13 | 3 red flashes |
+| `standup_now` | 08:15 | 6 faster red flashes |
+
+Full-brightness red on purpose — unlike the Herdr notification these are meant to
+be hard to miss, and the two differ in urgency rather than colour.
+
+```bat
+blink-light.bat alarm status
+blink-light.bat alarm test standup_now
+```
+
+`test` plays one now without consuming today's slot; `run` consumes it. `alarm now`
+fires whatever is currently due — that is what the scheduler loop calls.
+
+Alarms live in a top-level `alarms` list, so adding a third is a config entry, not
+a code change:
+
+```json
+"alarms": [
+  {
+    "name": "standup_warning",
+    "at": "08:13",
+    "action": { "scene": "standup_warning_scene" },
+    "enabled": true,
+    "catch_up_window_seconds": 120,
+    "respect_quiet_hours": true
+  }
+]
+```
+
+| Key | Required | Meaning |
+| --- | --- | --- |
+| `name` | yes | Unique. Keys the once-per-day dedupe. |
+| `at` | yes | `HH:MM`, 24-hour. |
+| `action` | yes | Any action: `scene`, `preset`, `color`, or `off`. |
+| `days` | no | e.g. `["mon","tue","wed","thu","fri"]`. Omit for every day. |
+| `enabled` | no | Default `true`. |
+| `catch_up_window_seconds` | no | Default `300`. How late a missed alarm may still fire. |
+| `respect_quiet_hours` | no | Default `true`. |
+
+Each alarm dedupes on its own key, so two alarms two minutes apart never swallow
+each other. Setting `alarms` in your config **replaces** the defaults rather than
+merging, so an alarm can be removed outright; `"alarms": []` disables all of them.
+
+**Weekdays only?** The shipped pair fire every day as asked. Add
+`"days": ["mon","tue","wed","thu","fri"]` to either one to skip weekends.
+
 ## Notifications (integration entry point)
 
 One-shot named flashes for external tools. No slots, no dedupe — it fires when you
@@ -249,6 +302,7 @@ The repo-local config file is `blink-light.json`. It contains:
 - `device.serial`
 - `chime`
 - `show`
+- `alarms`
 - `notify`
 - `presets`
 - `scenes`
@@ -294,6 +348,7 @@ underlying state on the next tick.
 | `blink-light.json` | Config. |
 | `blink_light/chime.py` | Hourly chime: slots, dedupe, scheduler loop, scheduled-task management. |
 | `blink_light/show.py` | Daily light show, same slot/dedupe shape as the chime. |
+| `blink_light/alarms.py` | Named daily alarms; shares slot logic with the show. |
 | `blink_light/notify.py` | Named one-shot notifications for external tools. |
 | `integrations/herdr/` | Herdr plugin: manifest plus its event handler. |
 | `blink_light/watcher.py` | Background loop, action precedence. |

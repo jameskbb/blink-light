@@ -1,4 +1,26 @@
 {
+  "alarms": [
+    {
+      "action": {
+        "scene": "standup_warning_scene"
+      },
+      "at": "08:13",
+      "catch_up_window_seconds": 120,
+      "enabled": true,
+      "name": "standup_warning",
+      "respect_quiet_hours": true
+    },
+    {
+      "action": {
+        "scene": "standup_now_scene"
+      },
+      "at": "08:15",
+      "catch_up_window_seconds": 120,
+      "enabled": true,
+      "name": "standup_now",
+      "respect_quiet_hours": true
+    }
+  ],
   "calendar": {
     "auto_watch_on_launch": true,
     "available_color": "#00C853",
@@ -239,6 +261,34 @@
         {
           "color": "#000000",
           "seconds": 1.4
+        }
+      ]
+    },
+    "standup_now_scene": {
+      "loop": false,
+      "repeat": 6,
+      "steps": [
+        {
+          "color": "#FF0000",
+          "seconds": 0.12
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.12
+        }
+      ]
+    },
+    "standup_warning_scene": {
+      "loop": false,
+      "repeat": 3,
+      "steps": [
+        {
+          "color": "#FF0000",
+          "seconds": 0.16
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.16
         }
       ]
     },

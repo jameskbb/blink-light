@@ -121,6 +121,33 @@ so a scene over the cap fails `config validate` rather than running long.
 
 ---
 
+### Verifying the daily alarms
+
+```bat
+blink-light.bat alarm status
+blink-light.bat alarm test standup_now
+```
+
+`status` shows each alarm's `next_slot` and when it last fired. `test` plays one
+without consuming the slot, so it will not stop the real one firing.
+
+`reason` explains why an alarm is not firing right now:
+
+| `reason` | Meaning |
+|---|---|
+| `due` | Would fire on the next wake. |
+| `already-fired` | Working as intended; it fires once per day. |
+| `outside-catch-up-window` | The slot passed more than `catch_up_window_seconds` ago. Expected most of the day. |
+| `wrong-day` | A `days` filter excludes today. |
+| `quiet-hours` | Inside `settings.quiet_hours`. |
+| `disabled` | `enabled: false`. |
+
+**After editing alarms, restart the runner** — it reads config once at startup:
+
+```bat
+blink-light.bat autostart enable
+```
+
 ## 3. Troubleshooting
 
 ### Start with the log

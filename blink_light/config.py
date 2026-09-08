@@ -67,6 +67,13 @@ def merge_config(user: dict[str, Any], detected_serial: str | None = None) -> di
         if not isinstance(user["notify"], dict):
             raise ConfigError("'notify' must be an object.")
         base["notify"] = _merge_named_section(base["notify"], user["notify"])
+    if "alarms" in user:
+        if not isinstance(user["alarms"], list):
+            raise ConfigError("'alarms' must be a list.")
+        # Replaced wholesale, like 'rules': a user listing alarms is stating the
+        # complete set, and merging by name would make an alarm impossible to
+        # delete without an explicit disable.
+        base["alarms"] = deepcopy(user["alarms"])
     for section in ("presets", "scenes", "routines"):
         if section in user:
             if not isinstance(user[section], dict):
@@ -89,6 +96,7 @@ def validate_config(payload: dict[str, Any]) -> None:
         "calendar",
         "chime",
         "show",
+        "alarms",
         "notify",
         "presets",
         "scenes",
@@ -107,6 +115,7 @@ def validate_config(payload: dict[str, Any]) -> None:
     _validate_calendar(payload["calendar"])
     _validate_chime(payload["chime"])
 
+    _validate_alarms(payload["alarms"])
     if not isinstance(payload["notify"], dict):
         raise ConfigError("'notify' must be an object.")
     for name, action in payload["notify"].items():
@@ -300,6 +309,8 @@ def _validate_action_references(payload: dict[str, Any]) -> None:
             walk(routine["completion_action"], f"routines.{name}.completion_action")
     for name, action in payload["notify"].items():
         walk(action, f"notify.{name}")
+    for index, alarm in enumerate(payload["alarms"]):
+        walk(alarm["action"], f"alarms[{index}].action")
     for index, rule in enumerate(payload["rules"]):
         walk(rule["action"], f"rules[{index}].action")
     walk(payload["settings"]["default_action"], "settings.default_action")
@@ -325,6 +336,60 @@ def _validate_chime(chime: Any) -> None:
     window = chime.get("catch_up_window_seconds")
     if not isinstance(window, (int, float)) or isinstance(window, bool) or window < 0:
         raise ConfigError("'chime.catch_up_window_seconds' must be zero or greater.")
+
+
+def _validate_alarms(alarms: Any) -> None:
+    from .alarms import DAY_NAMES
+
+    if not isinstance(alarms, list):
+        raise ConfigError("'alarms' must be a list.")
+
+    seen: set[str] = set()
+    for index, alarm in enumerate(alarms):
+        location = f"alarms[{index}]"
+        if not isinstance(alarm, dict):
+            raise ConfigError(f"{location} must be an object.")
+
+        name = alarm.get("name")
+        if not isinstance(name, str) or not name:
+            raise ConfigError(f"{location}.name must be a non-empty string.")
+        # Names key the dedupe state, so duplicates would silently share a slot
+        # record and one alarm would swallow the other.
+        if name in seen:
+            raise ConfigError(f"{location}.name '{name}' is used more than once.")
+        seen.add(name)
+
+        at = alarm.get("at")
+        if not isinstance(at, str) or len(at.split(":")) != 2:
+            raise ConfigError(f"{location}.at must look like HH:MM.")
+        try:
+            hour, minute = (int(part) for part in at.split(":"))
+        except ValueError as exc:
+            raise ConfigError(f"{location}.at must look like HH:MM.") from exc
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ConfigError(f"{location}.at must be a real time of day.")
+
+        _validate_action(alarm.get("action"), f"{location}.action")
+
+        if "enabled" in alarm and not isinstance(alarm["enabled"], bool):
+            raise ConfigError(f"{location}.enabled must be a boolean.")
+        if "respect_quiet_hours" in alarm and not isinstance(alarm["respect_quiet_hours"], bool):
+            raise ConfigError(f"{location}.respect_quiet_hours must be a boolean.")
+        if "catch_up_window_seconds" in alarm:
+            window = alarm["catch_up_window_seconds"]
+            if not isinstance(window, (int, float)) or isinstance(window, bool) or window < 0:
+                raise ConfigError(f"{location}.catch_up_window_seconds must be zero or greater.")
+
+        if "days" in alarm:
+            days = alarm["days"]
+            if not isinstance(days, list):
+                raise ConfigError(f"{location}.days must be a list of day names.")
+            for day in days:
+                if not isinstance(day, str) or str(day).strip().lower()[:3] not in DAY_NAMES:
+                    raise ConfigError(
+                        f"{location}.days entry '{day}' is not a day name "
+                        f"(use {', '.join(sorted(DAY_NAMES))})."
+                    )
 
 
 def _validate_show(show: Any, scenes: dict[str, Any]) -> None:

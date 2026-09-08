@@ -23,6 +23,7 @@ from .chime import (
     run_chime_loop,
     uninstall_scheduled_task,
 )
+from .alarms import alarm_status, fire_alarm, fire_due_alarms, find_alarm
 from .defaults import default_config
 from .notify import NotifyError, fire_notify, list_events, resolve_event
 from .show import fire_show, maybe_fire_show, show_status
@@ -82,6 +83,7 @@ def _print_welcome(stream: io.TextIOBase, controller_cls=BlinkDeviceController) 
     stream.write("  blink-light.bat chime install\n")
     stream.write("  blink-light.bat autostart enable\n")
     stream.write("  blink-light.bat show test\n")
+    stream.write("  blink-light.bat alarm status\n")
     stream.write("  blink-light.bat watch start\n")
     stream.write("  blink-light.bat override set --preset busy --expires-in 30m\n")
     stream.write("\n")
@@ -308,6 +310,15 @@ def _build_parser() -> argparse.ArgumentParser:
     chime_sub.add_parser("status", help="Show chime config, last fire, and next slot.")
     chime_sub.add_parser("install", help="Register the hourly Windows scheduled task.")
     chime_sub.add_parser("uninstall", help="Remove the hourly Windows scheduled task.")
+
+    alarm_parser = subparsers.add_parser("alarm", help="Named daily alarms (standup alerts).")
+    alarm_sub = alarm_parser.add_subparsers(dest="alarm_command", required=True)
+    alarm_sub.add_parser("status", help="Show every alarm, when it next fires, and when it last did.")
+    alarm_sub.add_parser("now", help="Fire any alarm that is currently due.")
+    alarm_test = alarm_sub.add_parser("test", help="Play one alarm now without consuming today's slot.")
+    alarm_test.add_argument("name")
+    alarm_run = alarm_sub.add_parser("run", help="Fire one alarm now and consume today's slot.")
+    alarm_run.add_argument("name")
 
     notify_parser = subparsers.add_parser(
         "notify",
@@ -639,6 +650,36 @@ def main(
                         resolved_paths,
                         controller_cls=controller_cls,
                         now_factory=now_factory,
+                    ),
+                )
+                return 0
+
+        if args.command == "alarm":
+            if args.alarm_command == "status":
+                _print_json(stream, alarm_status(config, resolved_paths, now_factory()))
+                return 0
+            if args.alarm_command == "now":
+                results = fire_due_alarms(
+                    config,
+                    resolved_paths,
+                    controller_cls=controller_cls,
+                    now=now_factory(),
+                    source="alarm-now",
+                )
+                _print_json(stream, {"fired": [result["alarm"] for result in results], "results": results})
+                return 0
+            if args.alarm_command in ("test", "run"):
+                alarm = find_alarm(config, args.name)
+                _print_json(
+                    stream,
+                    fire_alarm(
+                        config,
+                        resolved_paths,
+                        alarm,
+                        controller_cls=controller_cls,
+                        now=now_factory(),
+                        source=f"alarm-{args.alarm_command}",
+                        record=args.alarm_command == "run",
                     ),
                 )
                 return 0

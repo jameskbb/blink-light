@@ -325,6 +325,7 @@ def run_chime_loop(
     """
     import time as _time
 
+    from .alarms import fire_due_alarms, seconds_until_next_alarm
     from .show import maybe_fire_show, seconds_until_next_slot as show_seconds_until, show_time
 
     sleep_fn = sleep or _time.sleep
@@ -347,6 +348,7 @@ def run_chime_loop(
     at = show_time(config)
     fired = 0
     shows = 0
+    alarms = 0
     iterations = 0
     stopped_by = None
     try:
@@ -391,12 +393,28 @@ def run_chime_loop(
                     LOGGER.info("Played show")
             except Exception:
                 LOGGER.exception("Show failed")
+            try:
+                for result in fire_due_alarms(
+                    config,
+                    paths,
+                    controller_cls=controller_cls,
+                    now=current,
+                    source="chime-run",
+                ):
+                    alarms += 1
+                    LOGGER.info("Fired alarm %s", result["alarm"])
+            except Exception:
+                LOGGER.exception("Alarm failed")
 
             after = now_factory()
-            remaining = min(
+            candidates = [
                 seconds_until_next_slot(after, minute),
                 show_seconds_until(after, at),
-            )
+            ]
+            next_alarm = seconds_until_next_alarm(config, after)
+            if next_alarm is not None:
+                candidates.append(next_alarm)
+            remaining = min(candidates)
             # Sleep in slices so a stop request is noticed within a couple of
             # seconds rather than up to a minute later. Only the stop file is
             # re-checked per slice; the effects are still evaluated once per
@@ -419,14 +437,21 @@ def run_chime_loop(
         remove_file(paths.chime_pid_path)
         remove_file(paths.chime_stop_path)
         LOGGER.info(
-            "Loop stopped (%s) after %s wakes, %s chimes, %s shows",
+            "Loop stopped (%s) after %s wakes, %s chimes, %s shows, %s alarms",
             stopped_by,
             iterations,
             fired,
             shows,
+            alarms,
         )
         release_loop_logging()
-    return {"iterations": iterations, "fired": fired, "shows": shows, "stopped_by": stopped_by}
+    return {
+        "iterations": iterations,
+        "fired": fired,
+        "shows": shows,
+        "alarms": alarms,
+        "stopped_by": stopped_by,
+    }
 
 
 def _script_path(paths: AppPaths, name: str):

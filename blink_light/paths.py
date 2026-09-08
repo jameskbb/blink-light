@@ -20,6 +20,7 @@ class AppPaths:
     chime_pid_path: Path
     chime_stop_path: Path
     show_state_path: Path
+    alarm_state_path: Path
     override_path: Path
     timer_path: Path
     watcher_pid_path: Path
@@ -66,6 +67,7 @@ def build_paths(
         chime_pid_path=runtime / "chime.pid",
         chime_stop_path=runtime / "chime.stop",
         show_state_path=runtime / "show-state.json",
+        alarm_state_path=runtime / "alarm-state.json",
         override_path=runtime / "override.json",
         timer_path=runtime / "timer.json",
         watcher_pid_path=runtime / "watcher.pid",

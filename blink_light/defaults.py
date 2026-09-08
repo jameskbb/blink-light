@@ -109,6 +109,25 @@ BUILTIN_SCENES = {
             {"color": "#000000", "seconds": 0.20},
         ],
     },
+    # Standup alerts. Full-brightness red on purpose: unlike the Herdr
+    # notification these are meant to be hard to miss. The two are told apart by
+    # urgency - a short warning, then an insistent one.
+    "standup_warning_scene": {
+        "loop": False,
+        "repeat": 3,
+        "steps": [
+            {"color": "#FF0000", "seconds": 0.16},
+            {"color": "#000000", "seconds": 0.16},
+        ],
+    },
+    "standup_now_scene": {
+        "loop": False,
+        "repeat": 6,
+        "steps": [
+            {"color": "#FF0000", "seconds": 0.12},
+            {"color": "#000000", "seconds": 0.12},
+        ],
+    },
     "timer_done_scene": {
         "loop": True,
         "steps": [
@@ -220,6 +239,27 @@ BUILTIN_NOTIFY = {
     "agent_blocked": {"scene": "agent_blocked_scene"},
 }
 
+BUILTIN_ALARMS = [
+    {
+        "name": "standup_warning",
+        "at": "08:13",
+        "action": {"scene": "standup_warning_scene"},
+        "enabled": True,
+        "catch_up_window_seconds": 120,
+        "respect_quiet_hours": True,
+    },
+    {
+        "name": "standup_now",
+        "at": "08:15",
+        "action": {"scene": "standup_now_scene"},
+        "enabled": True,
+        # Tighter than the default: a standup alert five minutes late is worse
+        # than no alert, because it says the wrong thing about the time.
+        "catch_up_window_seconds": 120,
+        "respect_quiet_hours": True,
+    },
+]
+
 BUILTIN_SHOW = {
     "enabled": True,
     "at": "17:00",
@@ -254,6 +294,7 @@ def default_config(serial: str | None = None) -> dict:
         "calendar": deepcopy(BUILTIN_CALENDAR),
         "chime": deepcopy(BUILTIN_CHIME),
         "show": deepcopy(BUILTIN_SHOW),
+        "alarms": deepcopy(BUILTIN_ALARMS),
         "notify": deepcopy(BUILTIN_NOTIFY),
         "presets": deepcopy(BUILTIN_PRESETS),
         "scenes": deepcopy(BUILTIN_SCENES),
