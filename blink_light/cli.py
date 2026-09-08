@@ -11,9 +11,12 @@ from typing import Any, Callable
 from .config import ConfigError, build_effective_config
 from .calendar_source import calendar_enabled, choose_active_event, choose_next_event, poll_calendar
 from .chime import (
+    autostart_status,
     chime_status,
     fire_chime,
+    install_autostart_task,
     install_scheduled_task,
+    uninstall_autostart_task,
     maybe_fire_chime,
     run_chime_loop,
     uninstall_scheduled_task,
@@ -73,6 +76,7 @@ def _print_welcome(stream: io.TextIOBase, controller_cls=BlinkDeviceController) 
     stream.write("  blink-light.bat preset run focus\n")
     stream.write("  blink-light.bat timer start pomodoro\n")
     stream.write("  blink-light.bat chime install\n")
+    stream.write("  blink-light.bat autostart enable\n")
     stream.write("  blink-light.bat watch start\n")
     stream.write("  blink-light.bat override set --preset busy --expires-in 30m\n")
     stream.write("\n")
@@ -298,6 +302,20 @@ def _build_parser() -> argparse.ArgumentParser:
     chime_sub.add_parser("status", help="Show chime config, last fire, and next slot.")
     chime_sub.add_parser("install", help="Register the hourly Windows scheduled task.")
     chime_sub.add_parser("uninstall", help="Remove the hourly Windows scheduled task.")
+
+    autostart_parser = subparsers.add_parser(
+        "autostart",
+        help="Start the chime runner automatically at logon.",
+    )
+    autostart_sub = autostart_parser.add_subparsers(dest="autostart_command", required=True)
+    autostart_enable = autostart_sub.add_parser("enable", help="Register the logon task and start it now.")
+    autostart_enable.add_argument(
+        "--no-start",
+        action="store_true",
+        help="Register the task but wait for the next logon instead of starting it now.",
+    )
+    autostart_sub.add_parser("disable", help="Stop the runner and remove the logon task.")
+    autostart_sub.add_parser("status", help="Show whether the logon task is registered and running.")
 
     config_parser = subparsers.add_parser("config", help="Manage blink-light.json.")
     config_sub = config_parser.add_subparsers(dest="config_command", required=True)
@@ -589,6 +607,20 @@ def main(
                         now_factory=now_factory,
                     ),
                 )
+                return 0
+
+        if args.command == "autostart":
+            if args.autostart_command == "enable":
+                _print_json(
+                    stream,
+                    install_autostart_task(resolved_paths, start_now=not args.no_start),
+                )
+                return 0
+            if args.autostart_command == "disable":
+                _print_json(stream, uninstall_autostart_task())
+                return 0
+            if args.autostart_command == "status":
+                _print_json(stream, autostart_status())
                 return 0
 
         if args.command == "startup":

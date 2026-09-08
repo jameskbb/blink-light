@@ -22,6 +22,44 @@ blink-light.bat chime status
 blink-light.bat chime uninstall
 ```
 
+## Start It At Boot
+
+```bat
+blink-light.bat autostart enable
+```
+
+Registers a scheduled task named **BlinkLight Autostart** that starts the chime
+loop at every logon, and starts it immediately so you do not have to reboot to
+begin. Console window is hidden.
+
+```bat
+blink-light.bat autostart status
+blink-light.bat autostart disable
+blink-light.bat autostart enable --no-start
+```
+
+`disable` stops the running loop and removes the task. `--no-start` registers the
+task but waits for the next logon.
+
+**Trigger is logon, not machine start.** The blink(1) is a USB device on your
+desk, so the runner belongs in your interactive session rather than in the
+pre-logon SYSTEM context. In practice that means it comes up when you sign in.
+
+**Only one runner can exist.** The launcher waits on the loop, so the task action
+stays alive as long as the loop does, and Task Scheduler's default *do not start a
+new instance* policy makes a second logon a no-op. Even if a second one did start,
+the shared dedupe file means you would still get exactly one pulse per hour.
+
+### Do I need both tasks?
+
+No, but both is the sturdier setup and they cannot double-pulse:
+
+- **BlinkLight Autostart** is the runner. A live process, chimes on the minute.
+- **BlinkLight Hourly Chime** is the backstop. Stateless, so it still fires if the
+  loop died, the machine was asleep at the top of the hour, or you never logged in.
+
+Keep both unless you have a reason not to. To go loop-only, `chime uninstall`.
+
 ### How the runner works
 
 The scheduled task runs `wscript.exe "<repo>\blink-light-chime.vbs"`, which launches
@@ -32,7 +70,8 @@ Three things can drive the chime and all three are safe to run together:
 
 | Driver | Command | Notes |
 | --- | --- | --- |
-| Scheduled task | `chime install` | Survives reboot, no daemon. The recommended runner. |
+| Logon task | `autostart enable` | Runs `chime run` from every logon, console hidden. |
+| Hourly task | `chime install` | Stateless backstop, no daemon. Fires even if the loop is dead. |
 | Foreground loop | `chime run` | Sleeps until each slot. Good for a terminal you keep open. |
 | Background watcher | `watch start` | Chimes between watcher ticks, alongside calendar colors. |
 
@@ -124,9 +163,16 @@ blink-light.bat watch run
 blink-light.bat watch start
 blink-light.bat watch stop
 
+blink-light.bat autostart enable
+blink-light.bat autostart status
+
 blink-light.bat startup enable
 blink-light.bat startup status
 ```
+
+`autostart` runs the chime loop at logon. `startup` is the older Startup-folder
+mechanism and launches the full calendar watcher instead; use it if you want
+calendar colors, not just the chime.
 
 ## Config
 
@@ -171,8 +217,10 @@ underlying state on the next tick.
 | Path | Purpose |
 | --- | --- |
 | `blink-light.bat` | Launcher. Bootstraps `.venv`, installs `requirements.txt`, runs the CLI. |
-| `blink-light-chime.bat` | Runner invoked by the scheduled task; calls `chime now`. |
-| `blink-light-chime.vbs` | Hides the console window for the scheduled task. |
+| `blink-light-chime.bat` | Runner invoked by the hourly task; calls `chime now`. |
+| `blink-light-chime.vbs` | Hides the console window for the hourly task. |
+| `blink-light-autostart.bat` | Long-running runner started at logon; calls `chime run`. |
+| `blink-light-autostart.vbs` | Hides the console and waits on the loop (single-instance guard). |
 | `blink-light.json` | Config. |
 | `blink_light/chime.py` | Hourly chime: slots, dedupe, loop runner, scheduled-task management. |
 | `blink_light/watcher.py` | Background loop, action precedence. |

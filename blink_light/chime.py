@@ -22,7 +22,9 @@ from .rules import is_between_times
 from .state import read_json, write_json
 
 TASK_NAME = "BlinkLight Hourly Chime"
+AUTOSTART_TASK_NAME = "BlinkLight Autostart"
 CHIME_SCRIPT_NAME = "blink-light-chime.vbs"
+AUTOSTART_SCRIPT_NAME = "blink-light-autostart.vbs"
 
 
 def _now() -> datetime:
@@ -193,6 +195,7 @@ def chime_status(config: dict[str, Any], paths: AppPaths, now: datetime | None =
         "seconds_until_next_slot": round(seconds_until_next_slot(current, minute), 1),
         "last": read_chime_state(paths),
         "scheduled_task": scheduled_task_status(),
+        "autostart": autostart_status(),
     }
 
 
@@ -241,8 +244,11 @@ def run_chime_loop(
     return {"iterations": iterations, "fired": fired}
 
 
-def _chime_script_path(paths: AppPaths):
-    return paths.project_root / CHIME_SCRIPT_NAME
+def _script_path(paths: AppPaths, name: str):
+    script = paths.project_root / name
+    if not script.exists():
+        raise RuntimeError(f"Missing launcher script at {script}.")
+    return script
 
 
 def _run_schtasks(arguments: list[str]) -> subprocess.CompletedProcess:
@@ -256,24 +262,96 @@ def _run_schtasks(arguments: list[str]) -> subprocess.CompletedProcess:
     )
 
 
-def scheduled_task_status() -> dict[str, Any]:
+def _task_status(task_name: str) -> dict[str, Any]:
     if os.name != "nt":
-        return {"supported": False, "installed": False, "task_name": TASK_NAME}
+        return {"supported": False, "installed": False, "task_name": task_name}
     try:
-        completed = _run_schtasks(["/Query", "/TN", TASK_NAME])
+        completed = _run_schtasks(["/Query", "/TN", task_name])
     except (OSError, RuntimeError) as exc:  # pragma: no cover - environment dependent
-        return {"supported": False, "installed": False, "task_name": TASK_NAME, "error": str(exc)}
+        return {"supported": False, "installed": False, "task_name": task_name, "error": str(exc)}
     return {
         "supported": True,
         "installed": completed.returncode == 0,
-        "task_name": TASK_NAME,
+        "task_name": task_name,
     }
 
 
+def _delete_task(task_name: str) -> dict[str, Any]:
+    completed = _run_schtasks(["/Delete", "/TN", task_name, "/F"])
+    if completed.returncode != 0 and "cannot find" not in (completed.stderr or "").lower():
+        raise RuntimeError((completed.stderr or completed.stdout).strip() or "schtasks /Delete failed.")
+    return {"installed": False, "task_name": task_name}
+
+
+def scheduled_task_status() -> dict[str, Any]:
+    return _task_status(TASK_NAME)
+
+
+def autostart_status() -> dict[str, Any]:
+    """Status of the logon-triggered task that keeps the chime loop running."""
+    payload = _task_status(AUTOSTART_TASK_NAME)
+    payload["running"] = _autostart_running()
+    return payload
+
+
+def _autostart_running() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        completed = _run_schtasks(["/Query", "/TN", AUTOSTART_TASK_NAME, "/FO", "LIST"])
+    except (OSError, RuntimeError):  # pragma: no cover - environment dependent
+        return False
+    if completed.returncode != 0:
+        return False
+    for line in completed.stdout.splitlines():
+        if line.lower().startswith("status:"):
+            return line.split(":", 1)[1].strip().lower() == "running"
+    return False
+
+
+def install_autostart_task(paths: AppPaths, start_now: bool = True) -> dict[str, Any]:
+    """Register a logon-triggered task that runs the chime loop for the session.
+
+    The launcher waits on the loop, so the task action stays alive for as long
+    as the loop does. That makes schtasks' default "do not start a new instance"
+    policy the duplicate guard: logging out and back in cannot stack up runners.
+    """
+    script = _script_path(paths, AUTOSTART_SCRIPT_NAME)
+    completed = _run_schtasks(
+        [
+            "/Create",
+            "/TN",
+            AUTOSTART_TASK_NAME,
+            "/TR",
+            f'wscript.exe "{script}"',
+            "/SC",
+            "ONLOGON",
+            "/F",
+        ]
+    )
+    if completed.returncode != 0:
+        raise RuntimeError((completed.stderr or completed.stdout).strip() or "schtasks /Create failed.")
+
+    started = False
+    if start_now and not _autostart_running():
+        started = _run_schtasks(["/Run", "/TN", AUTOSTART_TASK_NAME]).returncode == 0
+
+    return {
+        "installed": True,
+        "task_name": AUTOSTART_TASK_NAME,
+        "trigger": "at logon",
+        "action": f'wscript.exe "{script}"',
+        "started_now": started,
+    }
+
+
+def uninstall_autostart_task() -> dict[str, Any]:
+    _run_schtasks(["/End", "/TN", AUTOSTART_TASK_NAME])
+    return _delete_task(AUTOSTART_TASK_NAME)
+
+
 def install_scheduled_task(config: dict[str, Any], paths: AppPaths) -> dict[str, Any]:
-    script = _chime_script_path(paths)
-    if not script.exists():
-        raise RuntimeError(f"Missing chime launcher at {script}.")
+    script = _script_path(paths, CHIME_SCRIPT_NAME)
     minute = chime_minute(config)
     completed = _run_schtasks(
         [
@@ -300,7 +378,4 @@ def install_scheduled_task(config: dict[str, Any], paths: AppPaths) -> dict[str,
 
 
 def uninstall_scheduled_task() -> dict[str, Any]:
-    completed = _run_schtasks(["/Delete", "/TN", TASK_NAME, "/F"])
-    if completed.returncode != 0 and "cannot find" not in (completed.stderr or "").lower():
-        raise RuntimeError((completed.stderr or completed.stdout).strip() or "schtasks /Delete failed.")
-    return {"installed": False, "task_name": TASK_NAME}
+    return _delete_task(TASK_NAME)

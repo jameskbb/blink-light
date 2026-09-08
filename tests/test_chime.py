@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import unittest
 
+import blink_light.chime as chime_module
 from blink_light.chime import (
     chime_action,
     current_slot,
@@ -137,6 +139,77 @@ class ChimeFiringTests(unittest.TestCase):
         self.assertEqual(summary["fired"], 1)
         self.assertEqual(summary["iterations"], 2)
         self.assertEqual(slept, [60.0, 60.0])
+
+
+class AutostartTaskTests(unittest.TestCase):
+    """The schtasks calls are stubbed; these pin the arguments we build."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        self.paths = build_paths(
+            config_path=self.root / "blink-light.json",
+            project_root=self.root,
+            runtime_dir=self.root / "runtime",
+            startup_dir=self.root / "startup",
+        )
+        (self.root / chime_module.AUTOSTART_SCRIPT_NAME).write_text("' stub", encoding="utf-8")
+        self.calls: list[list[str]] = []
+        self._original = chime_module._run_schtasks
+
+        def fake_schtasks(arguments):
+            self.calls.append(list(arguments))
+            return SimpleNamespace(returncode=0, stdout="Status: Ready", stderr="")
+
+        chime_module._run_schtasks = fake_schtasks
+
+    def tearDown(self) -> None:
+        chime_module._run_schtasks = self._original
+        self.tempdir.cleanup()
+
+    def test_enable_registers_a_logon_task_and_starts_it(self) -> None:
+        result = chime_module.install_autostart_task(self.paths)
+        create = self.calls[0]
+        self.assertIn("/Create", create)
+        self.assertEqual(create[create.index("/SC") + 1], "ONLOGON")
+        self.assertEqual(create[create.index("/TN") + 1], "BlinkLight Autostart")
+        self.assertIn(chime_module.AUTOSTART_SCRIPT_NAME, create[create.index("/TR") + 1])
+        self.assertIn("/F", create)
+        self.assertTrue(result["installed"])
+        self.assertTrue(result["started_now"])
+        self.assertIn(["/Run", "/TN", "BlinkLight Autostart"], self.calls)
+
+    def test_enable_with_no_start_only_registers(self) -> None:
+        result = chime_module.install_autostart_task(self.paths, start_now=False)
+        self.assertFalse(result["started_now"])
+        self.assertNotIn(["/Run", "/TN", "BlinkLight Autostart"], self.calls)
+
+    def test_enable_does_not_restart_an_already_running_task(self) -> None:
+        def running_schtasks(arguments):
+            self.calls.append(list(arguments))
+            return SimpleNamespace(returncode=0, stdout="Status: Running", stderr="")
+
+        chime_module._run_schtasks = running_schtasks
+        result = chime_module.install_autostart_task(self.paths)
+        self.assertFalse(result["started_now"])
+        self.assertNotIn(["/Run", "/TN", "BlinkLight Autostart"], self.calls)
+
+    def test_disable_ends_the_run_before_deleting(self) -> None:
+        result = chime_module.uninstall_autostart_task()
+        self.assertEqual(self.calls[0], ["/End", "/TN", "BlinkLight Autostart"])
+        self.assertIn("/Delete", self.calls[1])
+        self.assertFalse(result["installed"])
+
+    def test_missing_launcher_script_is_reported(self) -> None:
+        (self.root / chime_module.AUTOSTART_SCRIPT_NAME).unlink()
+        with self.assertRaises(RuntimeError):
+            chime_module.install_autostart_task(self.paths)
+
+    def test_delete_tolerates_a_task_that_is_not_there(self) -> None:
+        chime_module._run_schtasks = lambda arguments: SimpleNamespace(
+            returncode=1, stdout="", stderr="ERROR: The system cannot find the file specified."
+        )
+        self.assertFalse(chime_module.uninstall_autostart_task()["installed"])
 
 
 class ChimeConfigTests(unittest.TestCase):
