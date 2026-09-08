@@ -1,7 +1,4 @@
 {
-  "device": {
-    "serial": "12ab34cd"
-  },
   "calendar": {
     "auto_watch_on_launch": true,
     "available_color": "#00C853",
@@ -32,6 +29,9 @@
     "respect_quiet_hours": true,
     "secondary_color": "#000000"
   },
+  "device": {
+    "serial": "12ab34cd"
+  },
   "notify": {
     "agent_blocked": {
       "scene": "agent_blocked_scene"
@@ -40,21 +40,9 @@
       "scene": "agent_done_scene"
     }
   },
-  "show": {
-    "at": "17:00",
-    "catch_up_window_seconds": 300,
-    "enabled": true,
-    "max_seconds": 10,
-    "respect_quiet_hours": true,
-    "scene": "rainbow_swirl"
-  },
   "presets": {
     "available": {
       "color": "#00C853",
-      "fade_ms": 150
-    },
-    "calendar_free": {
-      "color": "#8E24AA",
       "fade_ms": 150
     },
     "away": {
@@ -67,6 +55,10 @@
     },
     "busy": {
       "color": "#D50000",
+      "fade_ms": 150
+    },
+    "calendar_free": {
+      "color": "#8E24AA",
       "fade_ms": 150
     },
     "focus": {
@@ -83,26 +75,6 @@
       "scene": "timer_done_scene"
     }
   },
-  "rules": [
-    {
-      "action": {
-        "preset": "timer_done"
-      },
-      "name": "timer-completed",
-      "when": {
-        "routine_phase": "completed"
-      }
-    },
-    {
-      "action": {
-        "preset": "away"
-      },
-      "name": "idle-away",
-      "when": {
-        "idle_seconds_gte": 600
-      }
-    }
-  ],
   "routines": {
     "hydrate": {
       "completion_action": {
@@ -187,7 +159,55 @@
       ]
     }
   },
+  "rules": [
+    {
+      "action": {
+        "preset": "timer_done"
+      },
+      "name": "timer-completed",
+      "when": {
+        "routine_phase": "completed"
+      }
+    },
+    {
+      "action": {
+        "preset": "away"
+      },
+      "name": "idle-away",
+      "when": {
+        "idle_seconds_gte": 600
+      }
+    }
+  ],
   "scenes": {
+    "agent_blocked_scene": {
+      "loop": false,
+      "repeat": 3,
+      "steps": [
+        {
+          "color": "#801E00",
+          "seconds": 0.22
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.2
+        }
+      ]
+    },
+    "agent_done_scene": {
+      "loop": false,
+      "repeat": 2,
+      "steps": [
+        {
+          "color": "#6C3C2C",
+          "seconds": 0.45
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.45
+        }
+      ]
+    },
     "hydrate_due_scene": {
       "loop": true,
       "steps": [
@@ -267,5 +287,13 @@
     "stop_turns_light_off": true,
     "tick_seconds": 5,
     "watchdog_millis": 8000
+  },
+  "show": {
+    "at": "17:00",
+    "catch_up_window_seconds": 300,
+    "enabled": true,
+    "max_seconds": 10,
+    "respect_quiet_hours": true,
+    "scene": "rainbow_swirl"
   }
 }

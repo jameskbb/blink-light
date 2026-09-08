@@ -24,11 +24,24 @@ and silence it with `herdr plugin disable blinklight.agent-status`.
 
 ## What you get
 
-| Agent goes | Light does | Event |
-|---|---|---|
-| → `idle` or `done` | Cyan/green double blink | `agent_done` |
-| → `blocked` | Orange triple blink | `agent_blocked` |
-| → `working` | Nothing | — |
+| Agent finishes | Light does | Colour | Event |
+|---|---|---|---|
+| → `idle` or `done` | Two slow breaths | Claude orange at 50% (`#6C3C2C`) | `agent_done` |
+| → `blocked` | Three quicker breaths | Red at 50% (`#801E00`) | `agent_blocked` |
+| → `working` | Nothing | — | — |
+
+Colours are derived, not hand-mixed: `scale_brightness("#D97757", 0.5)`. Scaling all
+three channels by the same factor keeps the hue recognisable, where clamping or
+blending toward grey would shift it. Full brightness reads as an alarm on a light
+that sits in your peripheral vision all day, hence the 50%.
+
+Done and blocked differ in **both hue and rhythm**, so they stay distinguishable
+at a glance and to a colour-blind viewer. Every step is a fade rather than a jump,
+so they read as breaths instead of blinks.
+
+To change the brightness or colour, edit `CLAUDE_ORANGE` / `NOTIFY_BRIGHTNESS` in
+`blink_light/defaults.py` and re-run `config init --force`, or just set the scene
+colours directly in `blink-light.json`.
 
 Both are short, non-looping scenes, so the light returns to whatever the watcher
 was showing. Restyle them in `blink-light.json` under `notify`:
@@ -59,6 +72,56 @@ screen-scrapes the pane and runs its own state machine (the rules live in
 `%LOCALAPPDATA%\herdr\agent-detection\remote\claude.toml`). This plugin hangs off
 the result of that, so it fires for every agent Herdr can detect, not just Claude.
 
+## When it fires, and when it stays quiet
+
+Three filters, each fixing a real way the naive version over-fired. The first
+version flashed **8 times in 17 minutes** across 6 sessions, which read as
+constant.
+
+**1. Only on a real transition.** Herdr has two finished-ish states, `idle` and
+`done`, and one agent turn can emit both — the live log showed `working → idle →
+done` for the same pane, which flashed twice for a single finish. The payload
+carries no previous status, so the handler keeps its own `pane-state.json` and
+fires only when a pane leaves `working`:
+
+```
+skip:  w7:p2 -> working (not notify-worthy)
+fired: agent_done for w7:p2 (working -> idle)
+skip:  w7:p2 idle -> done (not a finish)
+```
+
+**2. Not for the pane you are watching.** The focused pane needs no alert — you
+can see it. This matches Herdr's own sound, which only plays for background
+workspaces. The payload has no focus flag, so the handler asks
+`herdr agent list --json`, and only when a flash is otherwise imminent, so the
+subprocess cost is per notification rather than per event.
+
+**3. A cooldown.** Six agents finishing together would otherwise machine-gun the
+light. Default 8 seconds between flashes.
+
+### Tuning
+
+Drop a `config.json` into the plugin's config directory
+(`herdr plugin config-dir blinklight.agent-status`):
+
+```json
+{
+  "notify_focused": false,
+  "cooldown_seconds": 8,
+  "min_working_seconds": 0
+}
+```
+
+| Key | Default | Effect |
+|---|---|---|
+| `notify_focused` | `false` | `true` also flashes for the pane you are looking at. |
+| `cooldown_seconds` | `8` | Minimum gap between flashes. `0` disables. |
+| `min_working_seconds` | `0` | Ignore turns shorter than this — raise it if quick turns are noisy. |
+
+**Still too chatty?** Raise `cooldown_seconds`, or set `min_working_seconds` to
+something like `30` so only substantial turns announce themselves. To limit it to
+one workspace, add a `workspace_id` check in `handler.py` — the payload carries it.
+
 ### Why a `notify` verb instead of calling `light flash` directly
 
 The plugin could have called `light flash "#00E5FF" --count 2`. Naming the event
@@ -87,10 +150,13 @@ The log is at `%APPDATA%\herdr\plugins\state\blinklight.agent-status\blink-light
 (Herdr sets `HERDR_PLUGIN_STATE_DIR`; it falls back to `%TEMP%`):
 
 ```
-15:27:53 payload event=pane.agent_status_changed json={"pane_id":"w4:p1",...,"agent_status":"idle",...}
-15:27:56 fired: agent_done
-15:28:10 skip: status 'working' is not notify-worthy
+15:49:44 skip: w7:p2 -> working (not notify-worthy)
+15:49:49 fired: agent_done for w7:p2 (working -> idle)
+15:49:50 skip: w7:p2 idle -> done (not a finish)
 ```
+
+Every `skip:` line says which filter suppressed the flash, so "why didn't it
+blink" and "why did it blink" are both answerable from the log alone.
 
 Herdr keeps its own record too: `herdr plugin log list`.
 
@@ -101,12 +167,17 @@ but **not** the JSON payload for this event, and Herdr is closed-source. Rather
 than guess one schema, the handler reads the status tolerantly and logs every
 payload verbatim.
 
-The field name is nonetheless confirmed, from `herdr agent list`:
+The shape is nonetheless now **confirmed**, captured from a real event:
 
 ```json
-{ "pane_id": "w4:p1", "workspace_id": "w4", "agent": "claude",
-  "agent_status": "working", "tab_id": "w4:t1", "revision": 3 }
+{"event": "pane_agent_status_changed",
+ "data": {"type": "pane_agent_status_changed", "pane_id": "w7:p1",
+          "workspace_id": "w7", "agent_status": "idle", "agent": "claude"}}
 ```
+
+Note what is absent: no previous status and no focus flag. That absence is the
+reason for `pane-state.json` and the `herdr agent list` lookup above — the handler
+has to reconstruct both itself.
 
 So `agent_status` is checked first, with `status`, `state`, `agent_state`,
 `new_status` and `to` as fallbacks. Values are matched case-insensitively, and
@@ -139,7 +210,10 @@ Expect a cyan/green double blink and a `fired: agent_done` line in the log.
 
 | Symptom | Check |
 |---|---|
+| **Flashing constantly** | Read the log. `fired:` lines name the pane and transition. Raise `cooldown_seconds` or `min_working_seconds`. |
+| Nothing flashes any more | Are you looking at the pane? Focused panes are skipped by default — set `notify_focused: true`. |
 | No flash, nothing in the log | `herdr plugin list` — is it enabled? `herdr plugin log list` for Herdr's own record. |
+| `not a finish` for every event | The pane never registered `working`, so no transition is seen. Delete `pane-state.json` to reset. |
 | `no recognisable status in payload` | The payload shape changed. The logged JSON shows the new key; add it to `STATUS_KEYS` in `handler.py`. |
 | `skip: launcher missing` | The plugin was linked from a moved or deleted checkout. Re-link it. |
 | `unknown-event` in the log | `blink-light.json` has no `notify` entry by that name. `notify list` shows what exists. |

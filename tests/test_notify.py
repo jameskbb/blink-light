@@ -3,7 +3,14 @@ from __future__ import annotations
 import unittest
 
 from blink_light.config import ConfigError, merge_config, validate_config
-from blink_light.defaults import default_config, scene_duration_seconds
+from blink_light.defaults import (
+    AGENT_BLOCKED_COLOR,
+    AGENT_DONE_COLOR,
+    CLAUDE_ORANGE,
+    default_config,
+    scale_brightness,
+    scene_duration_seconds,
+)
 from blink_light.notify import NotifyError, fire_notify, list_events, resolve_event
 
 
@@ -87,6 +94,43 @@ class NotifySceneTests(unittest.TestCase):
         for name in ("agent_done_scene", "agent_blocked_scene"):
             with self.subTest(scene=name):
                 self.assertLessEqual(len(scenes[name]["steps"]), 32)
+
+
+class BrightnessTests(unittest.TestCase):
+    def test_full_brightness_is_the_identity(self) -> None:
+        self.assertEqual(scale_brightness("#D97757", 1.0), "#D97757")
+
+    def test_zero_brightness_is_black(self) -> None:
+        self.assertEqual(scale_brightness("#D97757", 0.0), "#000000")
+
+    def test_half_brightness_halves_every_channel(self) -> None:
+        self.assertEqual(scale_brightness("#D97757", 0.5), "#6C3C2C")
+
+    def test_hue_ratios_are_preserved(self) -> None:
+        """Dimming must not shift the colour, only its intensity."""
+        original = (0xD9, 0x77, 0x57)
+        dimmed_hex = scale_brightness("#D97757", 0.5).lstrip("#")
+        dimmed = tuple(int(dimmed_hex[i : i + 2], 16) for i in (0, 2, 4))
+        for index in range(3):
+            self.assertAlmostEqual(dimmed[index] / original[index], 0.5, delta=0.01)
+
+    def test_a_factor_out_of_range_is_clamped(self) -> None:
+        self.assertEqual(scale_brightness("#D97757", 5.0), "#D97757")
+        self.assertEqual(scale_brightness("#D97757", -1.0), "#000000")
+
+    def test_a_malformed_colour_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            scale_brightness("#FFF", 0.5)
+
+    def test_agent_done_is_claude_orange_at_half(self) -> None:
+        self.assertEqual(AGENT_DONE_COLOR, scale_brightness(CLAUDE_ORANGE, 0.5))
+        self.assertEqual(
+            default_config()["scenes"]["agent_done_scene"]["steps"][0]["color"],
+            AGENT_DONE_COLOR,
+        )
+
+    def test_done_and_blocked_are_visually_distinct(self) -> None:
+        self.assertNotEqual(AGENT_DONE_COLOR, AGENT_BLOCKED_COLOR)
 
 
 class NotifyConfigTests(unittest.TestCase):

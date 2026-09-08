@@ -15,6 +15,31 @@ def _hsv_hex(hue: float, value: float) -> str:
     return "#{:02X}{:02X}{:02X}".format(round(red * 255), round(green * 255), round(blue * 255))
 
 
+def scale_brightness(color: str, factor: float) -> str:
+    """Scale a #RRGGBB color's brightness, preserving its hue.
+
+    Scaling all three channels by the same factor keeps the ratios between them
+    fixed, which is what keeps the hue recognisable - dimming by clamping or by
+    blending toward grey would shift it.
+    """
+    text = color.lstrip("#")
+    if len(text) != 6:
+        raise ValueError(f"Expected a #RRGGBB color, got '{color}'.")
+    factor = max(0.0, min(1.0, factor))
+    channels = (int(text[index : index + 2], 16) for index in (0, 2, 4))
+    return "#{:02X}{:02X}{:02X}".format(*(round(value * factor) for value in channels))
+
+
+# Claude's signature orange. Dimmed for notifications: a light on the desk is
+# in peripheral vision all day, and full brightness reads as an alarm.
+CLAUDE_ORANGE = "#D97757"
+NOTIFY_BRIGHTNESS = 0.5
+AGENT_DONE_COLOR = scale_brightness(CLAUDE_ORANGE, NOTIFY_BRIGHTNESS)
+# Blocked shares the palette but sits redder, so the two are told apart by hue
+# as well as by rhythm.
+AGENT_BLOCKED_COLOR = scale_brightness("#FF3D00", NOTIFY_BRIGHTNESS)
+
+
 def rainbow_swirl_scene() -> dict:
     """A slow two-LED hue rotation that swells and settles. Under 10 seconds.
 
@@ -64,20 +89,23 @@ BUILTIN_SCENES = {
     "rainbow_swirl": rainbow_swirl_scene(),
     # Notification scenes are short and non-looping: they must finish on their
     # own so the light returns to whatever the watcher was showing.
+    #
+    # Every step is a fade rather than a jump, so these read as breaths instead
+    # of blinks. Done and blocked differ in both hue and rhythm: two slow
+    # breaths versus three quick ones.
     "agent_done_scene": {
         "loop": False,
         "repeat": 2,
         "steps": [
-            {"color": "#00E5FF", "seconds": 0.18},
-            {"color": "#00FF7F", "seconds": 0.18},
-            {"color": "#000000", "seconds": 0.22},
+            {"color": AGENT_DONE_COLOR, "seconds": 0.45},
+            {"color": "#000000", "seconds": 0.45},
         ],
     },
     "agent_blocked_scene": {
         "loop": False,
         "repeat": 3,
         "steps": [
-            {"color": "#FF6D00", "seconds": 0.22},
+            {"color": AGENT_BLOCKED_COLOR, "seconds": 0.22},
             {"color": "#000000", "seconds": 0.20},
         ],
     },
