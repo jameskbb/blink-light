@@ -32,7 +32,7 @@ def scale_brightness(color: str, factor: float) -> str:
 
 # Claude's signature orange. Dimmed for notifications: a light on the desk is
 # in peripheral vision all day, and full brightness reads as an alarm.
-CLAUDE_ORANGE = "#D97757"
+CLAUDE_ORANGE = "#DE7356"
 NOTIFY_BRIGHTNESS = 0.5
 AGENT_DONE_COLOR = scale_brightness(CLAUDE_ORANGE, NOTIFY_BRIGHTNESS)
 # Blocked shares the palette but sits redder, so the two are told apart by hue
