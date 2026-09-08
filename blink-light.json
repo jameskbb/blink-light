@@ -32,6 +32,14 @@
     "respect_quiet_hours": true,
     "secondary_color": "#000000"
   },
+  "show": {
+    "at": "17:00",
+    "catch_up_window_seconds": 300,
+    "enabled": true,
+    "max_seconds": 10,
+    "respect_quiet_hours": true,
+    "scene": "rainbow_swirl"
+  },
   "presets": {
     "available": {
       "color": "#00C853",

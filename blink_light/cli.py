@@ -16,12 +16,15 @@ from .chime import (
     fire_chime,
     install_autostart_task,
     install_scheduled_task,
+    loop_status,
+    stop_chime_loop,
     uninstall_autostart_task,
     maybe_fire_chime,
     run_chime_loop,
     uninstall_scheduled_task,
 )
 from .defaults import default_config
+from .show import fire_show, maybe_fire_show, show_status
 from .device import BlinkDeviceController, DeviceError
 from .paths import AppPaths, build_paths, ensure_runtime_dirs
 from .startup import disable_startup, enable_startup, startup_status
@@ -77,6 +80,7 @@ def _print_welcome(stream: io.TextIOBase, controller_cls=BlinkDeviceController) 
     stream.write("  blink-light.bat timer start pomodoro\n")
     stream.write("  blink-light.bat chime install\n")
     stream.write("  blink-light.bat autostart enable\n")
+    stream.write("  blink-light.bat show test\n")
     stream.write("  blink-light.bat watch start\n")
     stream.write("  blink-light.bat override set --preset busy --expires-in 30m\n")
     stream.write("\n")
@@ -299,9 +303,21 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     chime_sub.add_parser("test", help="Pulse once immediately without touching chime state.")
     chime_sub.add_parser("run", help="Run the hourly chime loop in the foreground.")
+    chime_sub.add_parser("stop", help="Ask a running chime loop to exit.")
     chime_sub.add_parser("status", help="Show chime config, last fire, and next slot.")
     chime_sub.add_parser("install", help="Register the hourly Windows scheduled task.")
     chime_sub.add_parser("uninstall", help="Remove the hourly Windows scheduled task.")
+
+    show_parser = subparsers.add_parser("show", help="Daily light show (rainbow swirl at 17:00).")
+    show_sub = show_parser.add_subparsers(dest="show_command", required=True)
+    show_now = show_sub.add_parser("now", help="Play the show if today's slot is still due.")
+    show_now.add_argument(
+        "--force",
+        action="store_true",
+        help="Play regardless of quiet hours, the catch-up window, or a show already played today.",
+    )
+    show_sub.add_parser("test", help="Play the show immediately without consuming today's slot.")
+    show_sub.add_parser("status", help="Show the schedule, scene length, and last run.")
 
     autostart_parser = subparsers.add_parser(
         "autostart",
@@ -597,6 +613,9 @@ def main(
                 )
                 _print_json(stream, payload)
                 return 0
+            if args.chime_command == "stop":
+                _print_json(stream, stop_chime_loop(resolved_paths))
+                return 0
             if args.chime_command == "run":
                 _print_json(
                     stream,
@@ -609,6 +628,43 @@ def main(
                 )
                 return 0
 
+        if args.command == "show":
+            if args.show_command == "status":
+                _print_json(stream, show_status(config, resolved_paths, now_factory()))
+                return 0
+            if args.show_command == "now":
+                if args.force:
+                    payload = fire_show(
+                        config,
+                        resolved_paths,
+                        controller_cls=controller_cls,
+                        now=now_factory(),
+                        source="show-now-forced",
+                    )
+                else:
+                    payload = maybe_fire_show(
+                        config,
+                        resolved_paths,
+                        controller_cls=controller_cls,
+                        now=now_factory(),
+                        source="show-now",
+                    )
+                _print_json(stream, payload)
+                return 0
+            if args.show_command == "test":
+                _print_json(
+                    stream,
+                    fire_show(
+                        config,
+                        resolved_paths,
+                        controller_cls=controller_cls,
+                        now=now_factory(),
+                        source="show-test",
+                        record=False,
+                    ),
+                )
+                return 0
+
         if args.command == "autostart":
             if args.autostart_command == "enable":
                 _print_json(
@@ -617,10 +673,10 @@ def main(
                 )
                 return 0
             if args.autostart_command == "disable":
-                _print_json(stream, uninstall_autostart_task())
+                _print_json(stream, uninstall_autostart_task(resolved_paths))
                 return 0
             if args.autostart_command == "status":
-                _print_json(stream, autostart_status())
+                _print_json(stream, autostart_status(resolved_paths))
                 return 0
 
         if args.command == "startup":

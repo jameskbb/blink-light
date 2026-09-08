@@ -59,6 +59,10 @@ def merge_config(user: dict[str, Any], detected_serial: str | None = None) -> di
         if not isinstance(user["chime"], dict):
             raise ConfigError("'chime' must be an object.")
         base["chime"] = _deep_merge(base["chime"], user["chime"])
+    if "show" in user:
+        if not isinstance(user["show"], dict):
+            raise ConfigError("'show' must be an object.")
+        base["show"] = _deep_merge(base["show"], user["show"])
     for section in ("presets", "scenes", "routines"):
         if section in user:
             if not isinstance(user[section], dict):
@@ -76,7 +80,7 @@ def merge_config(user: dict[str, Any], detected_serial: str | None = None) -> di
 
 
 def validate_config(payload: dict[str, Any]) -> None:
-    for key in ("device", "calendar", "chime", "presets", "scenes", "routines", "rules", "settings"):
+    for key in ("device", "calendar", "chime", "show", "presets", "scenes", "routines", "rules", "settings"):
         if key not in payload:
             raise ConfigError(f"Missing top-level key: {key}")
 
@@ -136,6 +140,8 @@ def validate_config(payload: dict[str, Any]) -> None:
         if not isinstance(value, str) or len(value.split(":")) != 2:
             raise ConfigError(f"'settings.quiet_hours.{key}' must look like HH:MM.")
     _validate_action(quiet_hours.get("action"), "settings.quiet_hours.action")
+    # Runs last: it measures a scene, so every scene must already be well formed.
+    _validate_show(payload["show"], payload["scenes"])
     _validate_action_references(payload)
 
 
@@ -298,6 +304,49 @@ def _validate_chime(chime: Any) -> None:
     window = chime.get("catch_up_window_seconds")
     if not isinstance(window, (int, float)) or isinstance(window, bool) or window < 0:
         raise ConfigError("'chime.catch_up_window_seconds' must be zero or greater.")
+
+
+def _validate_show(show: Any, scenes: dict[str, Any]) -> None:
+    from .defaults import scene_duration_seconds
+
+    if not isinstance(show, dict):
+        raise ConfigError("'show' must be an object.")
+    for key in ("enabled", "respect_quiet_hours"):
+        if not isinstance(show.get(key), bool):
+            raise ConfigError(f"'show.{key}' must be a boolean.")
+
+    at = show.get("at")
+    if not isinstance(at, str) or len(at.split(":")) != 2:
+        raise ConfigError("'show.at' must look like HH:MM.")
+    try:
+        hour, minute = (int(part) for part in at.split(":"))
+    except ValueError as exc:
+        raise ConfigError("'show.at' must look like HH:MM.") from exc
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ConfigError("'show.at' must be a real time of day.")
+
+    window = show.get("catch_up_window_seconds")
+    if not isinstance(window, (int, float)) or isinstance(window, bool) or window < 0:
+        raise ConfigError("'show.catch_up_window_seconds' must be zero or greater.")
+
+    max_seconds = show.get("max_seconds")
+    if not isinstance(max_seconds, (int, float)) or isinstance(max_seconds, bool) or max_seconds <= 0:
+        raise ConfigError("'show.max_seconds' must be a positive number.")
+
+    scene_name = show.get("scene")
+    if not isinstance(scene_name, str):
+        raise ConfigError("'show.scene' must be a string.")
+    if scene_name not in scenes:
+        raise ConfigError(f"'show.scene' refers to unknown scene '{scene_name}'.")
+
+    scene = scenes[scene_name]
+    if scene.get("loop", False):
+        raise ConfigError(f"'show.scene' cannot be a looping scene ('{scene_name}' loops forever).")
+    duration = scene_duration_seconds(scene)
+    if duration > float(max_seconds):
+        raise ConfigError(
+            f"'show.scene' runs {duration:.2f}s, over the {max_seconds}s cap in show.max_seconds."
+        )
 
 
 def _validate_calendar(calendar: Any) -> None:

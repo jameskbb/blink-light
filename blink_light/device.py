@@ -171,7 +171,10 @@ class BlinkDeviceController:
                 device.write_pattern_line(millis, step["color"], index, step.get("led", 0))
             for index in range(len(steps), 32):
                 device.write_pattern_line(0, "#000000", index, 0)
-            device.play(count=int(scene.get("repeat", 1)))
+            # Bound the play range to the real steps. Relying on end_pos=0 to
+            # mean "the whole pattern" is firmware-dependent; naming the last
+            # line is unambiguous on every blink(1).
+            device.play(0, max(0, len(steps) - 1), int(scene.get("repeat", 1)))
             return total_seconds * int(scene.get("repeat", 1))
 
     def _play_scene_host(self, scene: dict[str, Any], stop_event: threading.Event) -> None:

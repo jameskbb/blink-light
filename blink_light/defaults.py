@@ -1,6 +1,51 @@
 from __future__ import annotations
 
+import colorsys
+import math
 from copy import deepcopy
+
+
+RAINBOW_SWIRL_STEPS = 28
+RAINBOW_SWIRL_STEP_SECONDS = 0.34
+RAINBOW_SWIRL_FADE_OUT_SECONDS = 0.4
+
+
+def _hsv_hex(hue: float, value: float) -> str:
+    red, green, blue = colorsys.hsv_to_rgb(hue % 1.0, 1.0, max(0.0, min(1.0, value)))
+    return "#{:02X}{:02X}{:02X}".format(round(red * 255), round(green * 255), round(blue * 255))
+
+
+def rainbow_swirl_scene() -> dict:
+    """A slow two-LED hue rotation that swells and settles. Under 10 seconds.
+
+    Built rather than hand-written so the timing stays provably inside the cap.
+    Every step is a *fade* to the next color, and the two LEDs are held half a
+    turn apart in hue, so the light reads as a rotating gradient rather than a
+    strobe. Brightness never drops to zero mid-show - the envelope bottoms out
+    at 45% - which is what keeps it pretty instead of blinky.
+    """
+    steps = []
+    for index in range(RAINBOW_SWIRL_STEPS):
+        progress = index / (RAINBOW_SWIRL_STEPS - 1)
+        led = 1 if index % 2 == 0 else 2
+        # Each LED advances a full turn over the show; the odd LED trails by
+        # half a rotation so the pair always shows complementary colors.
+        hue = progress + (0.0 if led == 1 else 0.5)
+        value = 0.45 + 0.55 * math.sin(math.pi * progress)
+        steps.append(
+            {
+                "color": _hsv_hex(hue, value),
+                "seconds": RAINBOW_SWIRL_STEP_SECONDS,
+                "led": led,
+            }
+        )
+    steps.append({"color": "#000000", "seconds": RAINBOW_SWIRL_FADE_OUT_SECONDS, "led": 0})
+    return {"loop": False, "repeat": 1, "steps": steps}
+
+
+def scene_duration_seconds(scene: dict) -> float:
+    """Wall-clock length of one scene run, ignoring loop."""
+    return sum(float(step["seconds"]) for step in scene.get("steps", [])) * int(scene.get("repeat", 1))
 
 
 BUILTIN_PRESETS = {
@@ -16,6 +61,7 @@ BUILTIN_PRESETS = {
 }
 
 BUILTIN_SCENES = {
+    "rainbow_swirl": rainbow_swirl_scene(),
     "timer_done_scene": {
         "loop": True,
         "steps": [
@@ -122,6 +168,15 @@ BUILTIN_CHIME = {
     "respect_quiet_hours": True,
 }
 
+BUILTIN_SHOW = {
+    "enabled": True,
+    "at": "17:00",
+    "scene": "rainbow_swirl",
+    "max_seconds": 10,
+    "catch_up_window_seconds": 300,
+    "respect_quiet_hours": True,
+}
+
 BUILTIN_CALENDAR = {
     "enabled": True,
     "provider": "outlook",
@@ -146,6 +201,7 @@ def default_config(serial: str | None = None) -> dict:
         "device": {"serial": serial},
         "calendar": deepcopy(BUILTIN_CALENDAR),
         "chime": deepcopy(BUILTIN_CHIME),
+        "show": deepcopy(BUILTIN_SHOW),
         "presets": deepcopy(BUILTIN_PRESETS),
         "scenes": deepcopy(BUILTIN_SCENES),
         "routines": deepcopy(BUILTIN_ROUTINES),

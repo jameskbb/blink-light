@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+import os
 import tempfile
 import unittest
 
@@ -11,13 +12,16 @@ from blink_light.chime import (
     chime_action,
     current_slot,
     fire_chime,
+    loop_status,
     maybe_fire_chime,
     next_slot,
     read_chime_state,
     run_chime_loop,
     seconds_until_next_slot,
     should_fire,
+    stop_chime_loop,
 )
+from blink_light.state import remove_file
 from blink_light.config import ConfigError, merge_config, validate_config
 from blink_light.defaults import default_config
 from blink_light.paths import build_paths
@@ -126,19 +130,134 @@ class ChimeFiringTests(unittest.TestCase):
         self.assertTrue(follow_up["fired"])
 
     def test_run_loop_chimes_then_sleeps_until_the_next_slot(self) -> None:
-        clock = iter([at(12, 0, 1), at(12, 0, 1), at(12, 0, 2), at(12, 0, 2)])
         slept: list[float] = []
         summary = run_chime_loop(
             self.config,
             self.paths,
             controller_cls=FakeController,
-            now_factory=lambda: next(clock),
+            now_factory=lambda: at(12, 0, 1),
             sleep=slept.append,
             max_iterations=2,
         )
         self.assertEqual(summary["fired"], 1)
         self.assertEqual(summary["iterations"], 2)
-        self.assertEqual(slept, [60.0, 60.0])
+        # Two wakes, each sleeping a capped 60s worth of short slices.
+        self.assertEqual(sum(slept), 120.0)
+
+
+class ChimeLoopLifecycleTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        root = Path(self.tempdir.name)
+        self.paths = build_paths(
+            config_path=root / "blink-light.json",
+            project_root=root,
+            runtime_dir=root / "runtime",
+            startup_dir=root / "startup",
+        )
+        self.config = default_config()
+        self.config["settings"]["quiet_hours"]["enabled"] = False
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def _run(self, **kwargs):
+        clock = at(12, 0, 1)
+        return run_chime_loop(
+            self.config,
+            self.paths,
+            controller_cls=FakeController,
+            now_factory=lambda: clock,
+            sleep=lambda seconds: None,
+            **kwargs,
+        )
+
+    def test_loop_writes_a_pid_file_and_cleans_it_up(self) -> None:
+        self.assertFalse(self.paths.chime_pid_path.exists())
+        summary = self._run(max_iterations=1)
+        self.assertEqual(summary["stopped_by"], "max-iterations")
+        self.assertFalse(self.paths.chime_pid_path.exists())
+        self.assertFalse(self.paths.chime_stop_path.exists())
+
+    def test_a_stop_file_retires_the_loop(self) -> None:
+        self.paths.runtime_dir.mkdir(parents=True, exist_ok=True)
+        calls = {"n": 0}
+
+        def sleep(_seconds):
+            calls["n"] += 1
+            self.paths.chime_stop_path.write_text("stop", encoding="utf-8")
+
+        summary = run_chime_loop(
+            self.config,
+            self.paths,
+            controller_cls=FakeController,
+            now_factory=lambda: at(12, 0, 1),
+            sleep=sleep,
+        )
+        self.assertEqual(summary["stopped_by"], "stop-file")
+        self.assertEqual(calls["n"], 1)
+        self.assertFalse(self.paths.chime_stop_path.exists())
+
+    def test_a_long_sleep_is_broken_into_slices(self) -> None:
+        """A stop request must not wait out a full minute of sleep."""
+        slept: list[float] = []
+        run_chime_loop(
+            self.config,
+            self.paths,
+            controller_cls=FakeController,
+            now_factory=lambda: at(12, 0, 1),
+            sleep=slept.append,
+            max_iterations=1,
+        )
+        self.assertEqual(sum(slept), 60.0)
+        self.assertTrue(all(chunk <= chime_module.STOP_POLL_SECONDS for chunk in slept))
+
+    def test_a_stop_mid_sleep_is_noticed_within_one_slice(self) -> None:
+        self.paths.runtime_dir.mkdir(parents=True, exist_ok=True)
+        slept: list[float] = []
+
+        def sleep(seconds):
+            slept.append(seconds)
+            if len(slept) == 3:
+                self.paths.chime_stop_path.write_text("stop", encoding="utf-8")
+
+        summary = run_chime_loop(
+            self.config,
+            self.paths,
+            controller_cls=FakeController,
+            now_factory=lambda: at(12, 0, 1),
+            sleep=sleep,
+        )
+        self.assertEqual(summary["stopped_by"], "stop-file")
+        # Noticed on the next slice, not after the remaining ~54 seconds.
+        self.assertEqual(len(slept), 3)
+
+    def test_a_second_loop_refuses_to_start(self) -> None:
+        self.paths.runtime_dir.mkdir(parents=True, exist_ok=True)
+        # A live PID that is not us: our own parent. Writing os.getpid() would
+        # instead exercise the "this record is mine" restart path.
+        self.paths.chime_pid_path.write_text(str(os.getppid()), encoding="utf-8")
+        with self.assertRaises(RuntimeError):
+            run_chime_loop(
+                self.config,
+                self.paths,
+                controller_cls=FakeController,
+                now_factory=lambda: at(12, 0, 1),
+                sleep=lambda seconds: None,
+                max_iterations=1,
+            )
+
+    def test_a_stale_pid_file_does_not_block_a_new_loop(self) -> None:
+        self.paths.runtime_dir.mkdir(parents=True, exist_ok=True)
+        self.paths.chime_pid_path.write_text("999999999", encoding="utf-8")
+        summary = self._run(max_iterations=1)
+        self.assertEqual(summary["fired"], 1)
+
+    def test_loop_status_reports_nothing_running_when_idle(self) -> None:
+        self.assertEqual(loop_status(self.paths), {"running": False, "pid": None})
+
+    def test_stopping_an_idle_loop_is_a_no_op(self) -> None:
+        self.assertEqual(stop_chime_loop(self.paths), {"running": False, "pid": None})
 
 
 class AutostartTaskTests(unittest.TestCase):
@@ -156,49 +275,94 @@ class AutostartTaskTests(unittest.TestCase):
         (self.root / chime_module.AUTOSTART_SCRIPT_NAME).write_text("' stub", encoding="utf-8")
         self.calls: list[list[str]] = []
         self._original = chime_module._run_schtasks
+        self._original_await = chime_module._await_loop
 
         def fake_schtasks(arguments):
             self.calls.append(list(arguments))
             return SimpleNamespace(returncode=0, stdout="Status: Ready", stderr="")
 
         chime_module._run_schtasks = fake_schtasks
+        # No real loop can come up here, so stand in for the one that would.
+        chime_module._await_loop = lambda paths, timeout_seconds=20.0: {
+            "running": True,
+            "pid": 1234,
+        }
 
     def tearDown(self) -> None:
         chime_module._run_schtasks = self._original
+        chime_module._await_loop = self._original_await
         self.tempdir.cleanup()
 
     def test_enable_registers_a_logon_task_and_starts_it(self) -> None:
         result = chime_module.install_autostart_task(self.paths)
-        create = self.calls[0]
-        self.assertIn("/Create", create)
+        create = next(call for call in self.calls if "/Create" in call)
         self.assertEqual(create[create.index("/SC") + 1], "ONLOGON")
         self.assertEqual(create[create.index("/TN") + 1], "BlinkLight Autostart")
         self.assertIn(chime_module.AUTOSTART_SCRIPT_NAME, create[create.index("/TR") + 1])
         self.assertIn("/F", create)
         self.assertTrue(result["installed"])
         self.assertTrue(result["started_now"])
+        self.assertFalse(result["replaced_running_loop"])
         self.assertIn(["/Run", "/TN", "BlinkLight Autostart"], self.calls)
+
+    def test_enable_reports_failure_when_the_loop_never_comes_up(self) -> None:
+        """schtasks accepting the launch is not proof a runner survived."""
+        chime_module._await_loop = lambda paths, timeout_seconds=20.0: {
+            "running": False,
+            "pid": None,
+        }
+        result = chime_module.install_autostart_task(self.paths)
+        self.assertTrue(result["installed"])
+        self.assertFalse(result["started_now"])
+        self.assertEqual(result["loop"], {"running": False, "pid": None})
 
     def test_enable_with_no_start_only_registers(self) -> None:
         result = chime_module.install_autostart_task(self.paths, start_now=False)
         self.assertFalse(result["started_now"])
         self.assertNotIn(["/Run", "/TN", "BlinkLight Autostart"], self.calls)
 
-    def test_enable_does_not_restart_an_already_running_task(self) -> None:
-        def running_schtasks(arguments):
-            self.calls.append(list(arguments))
-            return SimpleNamespace(returncode=0, stdout="Status: Running", stderr="")
+    def test_enable_retires_an_orphaned_loop_first(self) -> None:
+        self.paths.runtime_dir.mkdir(parents=True, exist_ok=True)
+        self.paths.chime_pid_path.write_text(str(os.getpid()), encoding="utf-8")
+        stopped: list[bool] = []
+        original_stop = chime_module.stop_chime_loop
 
-        chime_module._run_schtasks = running_schtasks
-        result = chime_module.install_autostart_task(self.paths)
-        self.assertFalse(result["started_now"])
-        self.assertNotIn(["/Run", "/TN", "BlinkLight Autostart"], self.calls)
+        def fake_stop(paths, timeout_seconds=8.0):
+            stopped.append(True)
+            remove_file(paths.chime_pid_path)
+            return {"running": False, "pid": None}
 
-    def test_disable_ends_the_run_before_deleting(self) -> None:
-        result = chime_module.uninstall_autostart_task()
+        chime_module.stop_chime_loop = fake_stop
+        try:
+            result = chime_module.install_autostart_task(self.paths)
+        finally:
+            chime_module.stop_chime_loop = original_stop
+        self.assertTrue(stopped)
+        self.assertTrue(result["replaced_running_loop"])
+        # The launcher is ended before the task is recreated, never after.
+        self.assertLess(
+            self.calls.index(["/End", "/TN", "BlinkLight Autostart"]),
+            next(i for i, call in enumerate(self.calls) if "/Create" in call),
+        )
+
+    def test_disable_stops_the_loop_before_deleting_the_task(self) -> None:
+        order: list[str] = []
+        original_stop = chime_module.stop_chime_loop
+
+        def fake_stop(paths, timeout_seconds=8.0):
+            order.append("stop-loop")
+            return {"running": False, "pid": 4321}
+
+        chime_module.stop_chime_loop = fake_stop
+        try:
+            result = chime_module.uninstall_autostart_task(self.paths)
+        finally:
+            chime_module.stop_chime_loop = original_stop
+        self.assertEqual(order, ["stop-loop"])
         self.assertEqual(self.calls[0], ["/End", "/TN", "BlinkLight Autostart"])
         self.assertIn("/Delete", self.calls[1])
         self.assertFalse(result["installed"])
+        self.assertEqual(result["loop"], {"running": False, "pid": 4321})
 
     def test_missing_launcher_script_is_reported(self) -> None:
         (self.root / chime_module.AUTOSTART_SCRIPT_NAME).unlink()

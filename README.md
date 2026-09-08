@@ -1,6 +1,8 @@
 # blink-light
 
-Windows-first [`blink(1)`](https://blink1.thingm.com/) utility with a self-bootstrapping batch launcher, an hourly chime, one-shot light controls, Outlook-calendar watching, timers, local rule watching, persistent overrides, and opt-in startup registration.
+Windows-first [`blink(1)`](https://blink1.thingm.com/) utility with a self-bootstrapping batch launcher, an hourly chime, a daily light show, one-shot light controls, Outlook-calendar watching, timers, local rule watching, persistent overrides, and opt-in startup registration.
+
+**Docs:** [Architecture](docs/ARCHITECTURE.md) — how the scheduling works and what it costs to extend · [Runbook](docs/RUNBOOK.md) — setup, verification, troubleshooting, teardown.
 
 ## Hourly Chime (start here)
 
@@ -20,6 +22,40 @@ Verify and remove:
 ```bat
 blink-light.bat chime status
 blink-light.bat chime uninstall
+```
+
+## Daily Light Show
+
+A rainbow swirl at **17:00** every day, capped at 10 seconds.
+
+```bat
+blink-light.bat show test
+blink-light.bat show status
+```
+
+`test` plays it now without consuming today's slot. It runs on the same scheduler
+loop as the chime, so nothing extra to install.
+
+It is a hue rotation, not a strobe: both LEDs are held half a turn apart in color
+and every step is a *fade*, with brightness swelling from 45% to full and back
+before a clean fade to black. 29 steps, 9.92s, uploaded to the device so playback
+stays smooth even when the machine is busy.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `true` | Master switch. |
+| `at` | `"17:00"` | Time of day, `HH:MM`. |
+| `scene` | `"rainbow_swirl"` | Any non-looping scene in `scenes`. |
+| `max_seconds` | `10` | Hard cap. A longer scene fails `config validate`. |
+| `catch_up_window_seconds` | `300` | How late a missed show may still play. |
+| `respect_quiet_hours` | `true` | Skip inside `settings.quiet_hours`. |
+
+The cap is enforced at validation time, not by truncating playback — point `scene`
+at something longer and the CLI refuses it with the measured duration.
+
+```bat
+blink-light.bat show now
+blink-light.bat show now --force
 ```
 
 ## Start It At Boot
@@ -70,10 +106,13 @@ Three things can drive the chime and all three are safe to run together:
 
 | Driver | Command | Notes |
 | --- | --- | --- |
-| Logon task | `autostart enable` | Runs `chime run` from every logon, console hidden. |
+| Logon task | `autostart enable` | Runs `chime run` from every logon, console hidden. Also drives the daily show. |
 | Hourly task | `chime install` | Stateless backstop, no daemon. Fires even if the loop is dead. |
 | Foreground loop | `chime run` | Sleeps until each slot. Good for a terminal you keep open. |
 | Background watcher | `watch start` | Chimes between watcher ticks, alongside calendar colors. |
+
+Stop a running loop with `chime stop`. Never end the scheduled task by hand — see
+[the runbook](docs/RUNBOOK.md#orphaned-loops-after-killing-the-task-by-hand).
 
 Every driver writes the hour it fired to `%LOCALAPPDATA%\BlinkLight\chime-state.json`
 and skips a slot that is already recorded, so the chime fires **once per hour** no
@@ -180,6 +219,7 @@ The repo-local config file is `blink-light.json`. It contains:
 
 - `device.serial`
 - `chime`
+- `show`
 - `presets`
 - `scenes`
 - `routines`
@@ -222,9 +262,11 @@ underlying state on the next tick.
 | `blink-light-autostart.bat` | Long-running runner started at logon; calls `chime run`. |
 | `blink-light-autostart.vbs` | Hides the console and waits on the loop (single-instance guard). |
 | `blink-light.json` | Config. |
-| `blink_light/chime.py` | Hourly chime: slots, dedupe, loop runner, scheduled-task management. |
+| `blink_light/chime.py` | Hourly chime: slots, dedupe, scheduler loop, scheduled-task management. |
+| `blink_light/show.py` | Daily light show, same slot/dedupe shape as the chime. |
 | `blink_light/watcher.py` | Background loop, action precedence. |
 | `blink_light/cli.py` | Argument parsing and command dispatch. |
+| `docs/` | Architecture and runbook. |
 | `tests/` | `unittest` suite, no hardware required. |
 
 ## Tests
