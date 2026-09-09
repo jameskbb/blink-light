@@ -22,23 +22,34 @@
     }
   ],
   "calendar": {
+    "alert_statuses": [
+      1,
+      2
+    ],
     "auto_watch_on_launch": true,
     "available_color": "#00C853",
     "busy_meeting_color": "#D50000",
     "enabled": true,
-    "free_meeting_color": "#8E24AA",
-    "free_statuses": [
-      0
-    ],
+    "five_minute_warning": {
+      "color": "#FB8C00",
+      "count": 4,
+      "off_ms": 110,
+      "on_ms": 130
+    },
+    "graph": {
+      "client_id": "",
+      "tenant_id": "organizations"
+    },
     "ignore_all_day": true,
     "lookahead_minutes": 15,
     "poll_seconds": 30,
     "provider": "outlook",
-    "ten_minute_warning_color": "#FDD835",
-    "two_minute_warning_color": "#FB8C00",
-    "warning_count": 1,
-    "warning_off_ms": 120,
-    "warning_on_ms": 180
+    "ten_minute_warning": {
+      "color": "#FDD835",
+      "count": 2,
+      "off_ms": 180,
+      "on_ms": 220
+    }
   },
   "chime": {
     "catch_up_window_seconds": 300,

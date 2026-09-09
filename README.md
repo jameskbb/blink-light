@@ -35,11 +35,14 @@ returns to; everything above plays on top of it.
 | Situation | Colour |
 | --- | --- |
 | Nothing scheduled | 🟢 `#00C853` green |
-| In a booked meeting | 🔴 `#D50000` red |
-| In a meeting marked Free | 🟣 `#8E24AA` purple |
-| Meeting in 10 minutes | 🟡 `#FDD835` single blink |
-| Meeting in 2 minutes | 🟠 `#FB8C00` single blink |
+| In a Busy or Tentative meeting | 🔴 `#D50000` red |
+| Meeting in 10 minutes | 🟡 `#FDD835` — 2 slow blinks |
+| Meeting in 5 minutes | 🟠 `#FB8C00` — 4 quick blinks |
 | Idle 10+ minutes | 🔵 `#2962FF` blue |
+
+Meetings marked **Free**, **Out of Office** or **Working Elsewhere** are ignored
+entirely — no colour, no warning. Only `alert_statuses` (Tentative and Busy by
+default) moves the light.
 
 ### Quiet hours
 
@@ -311,17 +314,114 @@ If `calendar.enabled` and `calendar.auto_watch_on_launch` are both `true`, runni
 The default config is Outlook-first and maps your calendar like this:
 
 - `green` when nothing is currently scheduled
-- `yellow` single blink when the next meeting is 10 minutes out
-- `orange` single blink when the next meeting is 2 minutes out
-- `red` during an active booked meeting
-- `purple` during an active meeting whose Outlook busy status is `Free`
+- `yellow`, 2 slow blinks, when the next meeting is 10 minutes out
+- `orange`, 4 quick blinks, when the next meeting is 5 minutes out
+- `red` during an active meeting
+
+### Picking a provider
+
+| Provider | Reads | Setup |
+| --- | --- | --- |
+| `graph` | Your Microsoft 365 mailbox on the server — the same data the Outlook web app shows | One-time Entra app registration, then `calendar login` |
+| `outlook` | The classic Outlook desktop client's local cache, over COM | None |
+
+**Use `graph` if you live in the Outlook PWA.** The COM provider only sees what
+the classic desktop profile has cached locally, which can silently omit
+meetings — in particular ones you were invited to but did not organise. Graph
+reads the mailbox itself, so what the light sees is what the web app sees.
+
+### Signing in with Microsoft 365
+
+One-time, about five minutes:
+
+1. Open [Entra app registrations](https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) → **New registration**.
+2. Name it `blink-light`. Under **Supported account types** pick *Accounts in this organizational directory only*.
+3. Under **Redirect URI**, choose **Public client/native** and enter `http://localhost`.
+4. Register, then copy the **Application (client) ID** and **Directory (tenant) ID** into `.env` (see below) — not into `blink-light.json`, which is committed.
+5. **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated** → `Calendars.Read` → Add. If your tenant requires it, click **Grant admin consent** (or ask an admin to).
+6. Fill in `.env`, set `"provider": "graph"` in `blink-light.json`, then run:
+
+```bat
+copy .env.template .env
+rem edit .env, then:
+blink-light.bat calendar login
+blink-light.bat calendar upcoming --hours 24
+```
+
+## Secrets and local settings
+
+Credentials never live in the repo. Three layers enforce that:
+
+| Layer | What it does |
+| --- | --- |
+| `.env` (gitignored) | Where ids and credentials actually live. `.env.template` documents the keys and is the only `.env.*` file that is committed. |
+| `.gitignore` | Ignores `.env`, `*.local.json`, `*token-cache*.json`, `*.token`. |
+| `.githooks/pre-commit` | Blocks a commit that stages one of those files — even with `git add -f` — or that adds a credential-shaped value to any file. |
+
+Install the hook once per clone:
+
+```bat
+git config core.hooksPath .githooks
+```
+
+The rules live in `blink_light/secret_scan.py`, and the test suite runs the same
+scan over every tracked file, so a leak fails the build as well as the commit.
+Run it by hand any time:
+
+```bat
+.venv\Scripts\python -m blink_light.secret_scan --tracked
+```
+
+Recognised variables (all optional except the first two, and only for the Graph
+provider):
+
+| Variable | Sets |
+| --- | --- |
+| `BLINK_LIGHT_GRAPH_CLIENT_ID` | `calendar.graph.client_id` |
+| `BLINK_LIGHT_GRAPH_TENANT_ID` | `calendar.graph.tenant_id` |
+| `BLINK_LIGHT_CALENDAR_PROVIDER` | `calendar.provider` |
+| `BLINK_LIGHT_DEVICE_SERIAL` | `device.serial` |
+
+Real environment variables win over `.env`, so a scheduled task can override the
+file without editing it. The Microsoft refresh token is never in the repo either
+— it lives in `%LOCALAPPDATA%\BlinkLight\graph-token-cache.json`.
+
+`calendar login` opens a browser, and falls back to a device code if it cannot.
+The refresh token is cached in `%LOCALAPPDATA%\BlinkLight\graph-token-cache.json`
+— outside the repo, so it cannot be committed by accident. `calendar logout`
+removes it.
+
+The only scope requested is `Calendars.Read`. The light never writes to your
+calendar.
+
+### Which meetings count
+
+`calendar.alert_statuses` is a list of Outlook `OlBusyStatus` values, and only
+those events do anything at all:
+
+| Outlook status | Value | Default |
+| --- | --- | --- |
+| Free | `0` | ignored |
+| Tentative | `1` | ✅ colour + warnings |
+| Busy | `2` | ✅ colour + warnings |
+| Out of Office | `3` | ignored |
+| Working Elsewhere | `4` | ignored |
+
+An ignored event cannot colour the light or fire a warning, and it cannot hide a
+real meeting either: a Free block overlapping a Busy one is skipped, and the
+Busy meeting still gets its warnings.
+
+To make Out of Office count too, set `"alert_statuses": [1, 2, 3]`.
 
 Notes:
 
-- The current implementation polls the default Outlook calendar on Windows via Outlook COM.
 - All-day events are ignored by default.
-- Reminder blinks are one-shot per event, so the light returns to its normal availability color after the blink.
+- Cancelled meetings are dropped (Graph provider).
+- Graph reports availability as words (`busy`, `oof`, …); they are mapped onto the same Outlook status numbers above, so `alert_statuses` means one thing regardless of provider.
+- Each warning is one-shot per meeting, so the light returns to its normal availability color after the blinks.
+- The warnings own windows, not deadlines: 10–5 minutes out fires the first, under 5 minutes fires the second. Starting the watcher three minutes before a meeting gets you the five-minute warning only — never a ten-minute warning that is already false.
 - `watch start` and the no-argument launch path use the same watcher logic.
+- `blink-light.bat status` reports `event_count` alongside `alertable_event_count`, which is usually the answer to "why is my light still green?"
 
 ## Useful Commands
 
@@ -344,6 +444,11 @@ blink-light.bat watch once
 blink-light.bat watch run
 blink-light.bat watch start
 blink-light.bat watch stop
+
+blink-light.bat calendar login
+blink-light.bat calendar status
+blink-light.bat calendar upcoming --hours 24
+blink-light.bat calendar logout
 
 blink-light.bat autostart enable
 blink-light.bat autostart status

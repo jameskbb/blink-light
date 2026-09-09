@@ -1,0 +1,30 @@
+#!/bin/sh
+# Blocks credentials from entering the repo. Install with:
+#
+#   git config core.hooksPath .githooks
+#
+# The actual rules live in blink_light/secret_scan.py, shared with the test
+# suite. This wrapper only finds a Python to run them with - and refuses the
+# commit if it cannot, so the guardrail fails closed rather than silently
+# passing when a tool is missing.
+
+set -e
+
+root=$(git rev-parse --show-toplevel)
+
+if [ -x "$root/.venv/Scripts/python.exe" ]; then
+  python="$root/.venv/Scripts/python.exe"
+elif [ -x "$root/.venv/bin/python" ]; then
+  python="$root/.venv/bin/python"
+elif command -v py >/dev/null 2>&1; then
+  python="py"
+elif command -v python >/dev/null 2>&1; then
+  python="python"
+else
+  echo "BLOCKED: no Python found to run the secret scan." >&2
+  echo "Run blink-light.bat once to create .venv, or install Python." >&2
+  exit 1
+fi
+
+cd "$root"
+"$python" -m blink_light.secret_scan --staged

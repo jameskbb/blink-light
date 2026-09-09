@@ -23,6 +23,17 @@ def readme_text() -> str:
     return README.read_text(encoding="utf-8")
 
 
+def _nested_strings(payload: dict) -> list[str]:
+    """Every string in a config subtree, so nested blocks are not missed."""
+    found: list[str] = []
+    for value in payload.values():
+        if isinstance(value, str):
+            found.append(value)
+        elif isinstance(value, dict):
+            found.extend(_nested_strings(value))
+    return found
+
+
 class ScheduleTableTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -80,15 +91,35 @@ class ScheduleTableTests(unittest.TestCase):
 
     def test_calendar_colours_match(self) -> None:
         calendar = self.config["calendar"]
-        for key in (
-            "available_color",
-            "busy_meeting_color",
-            "free_meeting_color",
-            "ten_minute_warning_color",
-            "two_minute_warning_color",
-        ):
+        for key in ("available_color", "busy_meeting_color"):
             with self.subTest(key=key):
                 self.assertIn(calendar[key], self.text)
+        for key in ("ten_minute_warning", "five_minute_warning"):
+            with self.subTest(key=key):
+                self.assertIn(calendar[key]["color"], self.text)
+
+    def test_calendar_warning_blink_counts_match(self) -> None:
+        calendar = self.config["calendar"]
+        for key, label in (("ten_minute_warning", "10 minutes"), ("five_minute_warning", "5 minutes")):
+            with self.subTest(key=key):
+                row = self._row_for(f"Meeting in {label}")
+                self.assertIn(f"{calendar[key]['count']} ", row)
+                self.assertIn(calendar[key]["color"], row)
+
+    def test_alert_statuses_table_matches_the_config(self) -> None:
+        """The status table must mark exactly the configured statuses as alerting."""
+        alerting = set(self.config["calendar"]["alert_statuses"])
+        statuses = {
+            "Free": 0,
+            "Tentative": 1,
+            "Busy": 2,
+            "Out of Office": 3,
+            "Working Elsewhere": 4,
+        }
+        for name, value in statuses.items():
+            row = self._row_for(f"| {name} | `{value}` |")
+            with self.subTest(busy_status=name):
+                self.assertEqual("ignored" in row, value not in alerting, row)
 
     def test_every_scheduled_thing_is_listed(self) -> None:
         """A new alarm must not be able to slip in undocumented."""
@@ -103,7 +134,7 @@ class ScheduleTableTests(unittest.TestCase):
             for scene in self.config["scenes"].values()
             for step in scene["steps"]
         }
-        in_use |= {value.upper() for value in self.config["calendar"].values() if isinstance(value, str)}
+        in_use |= {value.upper() for value in _nested_strings(self.config["calendar"])}
         in_use |= {action["color"].upper() for action in self.config["presets"].values() if "color" in action}
         in_use.add(self.config["chime"]["color"].upper())
 

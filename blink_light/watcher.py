@@ -224,7 +224,7 @@ def run_watch_loop(
     )
 
     controller = controller_cls(serial=config["device"].get("serial"))
-    calendar_cache = CalendarCache(config)
+    calendar_cache = CalendarCache(config, paths=paths)
     paths.watcher_pid_path.write_text(str(os.getpid()), encoding="utf-8")
     remove_file(paths.watcher_stop_path)
     last_signature = None
@@ -233,13 +233,22 @@ def run_watch_loop(
             if paths.watcher_stop_path.exists():
                 break
             current = now_factory()
-            result = determine_action(
-                config,
-                paths,
-                snapshot_factory=snapshot_factory,
-                now=current,
-                calendar_snapshot=calendar_cache.get(current),
-            )
+            try:
+                result = determine_action(
+                    config,
+                    paths,
+                    snapshot_factory=snapshot_factory,
+                    now=current,
+                    calendar_snapshot=calendar_cache.get(current),
+                )
+            except Exception:
+                # One bad tick - a malformed calendar entry, a transient COM
+                # failure - used to kill the loop and take the light with it.
+                # Log it and try again next tick; the light keeps showing
+                # whatever it was showing.
+                logging.exception("Tick failed; keeping the previous action")
+                time.sleep(float(config["settings"]["tick_seconds"]))
+                continue
             signature = json.dumps(result["action"], sort_keys=True)
             if signature != last_signature:
                 controller.apply_action(result["action"], config["scenes"], persistent=True)

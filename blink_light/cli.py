@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 from datetime import datetime, timedelta
 import io
 import json
@@ -9,7 +10,14 @@ import sys
 from typing import Any, Callable
 
 from .config import ConfigError, build_effective_config
-from .calendar_source import calendar_enabled, choose_active_event, choose_next_event, poll_calendar
+from .calendar_source import (
+    alert_statuses,
+    alertable_events,
+    calendar_enabled,
+    choose_active_event,
+    choose_next_event,
+    poll_calendar,
+)
 from .chime import (
     autostart_status,
     chime_status,
@@ -24,7 +32,7 @@ from .chime import (
     uninstall_scheduled_task,
 )
 from .alarms import alarm_status, fire_alarm, fire_due_alarms, find_alarm
-from .defaults import default_config
+from .defaults import BUSY_STATUS_NAMES, default_config
 from .notify import NotifyError, fire_notify, list_events, resolve_event
 from .show import fire_show, maybe_fire_show, show_status
 from .device import BlinkDeviceController, DeviceError
@@ -170,20 +178,129 @@ def _timer_payload(snapshot: TimerSnapshot) -> dict[str, Any]:
     }
 
 
-def _calendar_status(config: dict[str, Any], now: datetime) -> dict[str, Any] | None:
+def _calendar_status(
+    config: dict[str, Any],
+    now: datetime,
+    paths: AppPaths | None = None,
+) -> dict[str, Any] | None:
     if not calendar_enabled(config):
         return None
-    snapshot = poll_calendar(config, now)
-    free_statuses = set(int(value) for value in config["calendar"].get("free_statuses", [0]))
-    active_event = choose_active_event(snapshot.events, now, free_statuses)
-    next_event = choose_next_event(snapshot.events, now)
+    snapshot = poll_calendar(config, now, paths)
+    events = alertable_events(snapshot.events, alert_statuses(config))
+    active_event = choose_active_event(events, now)
+    next_event = choose_next_event(events, now)
     return {
         "provider": snapshot.provider,
         "fetched_at": snapshot.fetched_at.isoformat(),
         "error": snapshot.error,
+        # Two counts, because "3 events, none of them alertable" is the answer
+        # to most "why is my light still green?" questions.
         "event_count": len(snapshot.events),
+        "alertable_event_count": len(events),
         "active_event": active_event.to_payload() if active_event else None,
         "next_event": next_event.to_payload() if next_event else None,
+    }
+
+
+def _run_calendar_command(
+    args: argparse.Namespace,
+    config: dict[str, Any],
+    paths: AppPaths,
+    stream,
+    now: datetime,
+) -> int:
+    from .graph_calendar import GraphAuthError, sign_in, sign_out, signed_in_account
+
+    ensure_runtime_dirs(paths)
+
+    if args.calendar_command == "login":
+        result = sign_in(config, paths.graph_token_path, prompt=lambda message: print(message, file=stream))
+        claims = result.get("id_token_claims", {})
+        _print_json(
+            stream,
+            {
+                "signed_in": True,
+                "account": claims.get("preferred_username") or claims.get("name"),
+                "token_cache": str(paths.graph_token_path),
+            },
+        )
+        return 0
+
+    if args.calendar_command == "logout":
+        removed = sign_out(config, paths.graph_token_path)
+        _print_json(stream, {"signed_out": True, "accounts_removed": removed})
+        return 0
+
+    if args.calendar_command == "status":
+        try:
+            account = signed_in_account(config, paths.graph_token_path)
+        except GraphAuthError as exc:
+            account = None
+            _print_json(stream, {"provider": config["calendar"]["provider"], "error": str(exc)})
+            return 1
+        payload = {
+            "provider": config["calendar"]["provider"],
+            "account": account,
+            "alert_statuses": config["calendar"]["alert_statuses"],
+        }
+        payload.update(_calendar_status(config, now, paths) or {})
+        _print_json(stream, payload)
+        return 0
+
+    if args.calendar_command == "upcoming":
+        _print_json(stream, _calendar_upcoming(config, paths, now, hours=args.hours))
+        return 0
+
+    return 1
+
+
+def _calendar_upcoming(
+    config: dict[str, Any],
+    paths: AppPaths,
+    now: datetime,
+    hours: float,
+) -> dict[str, Any]:
+    """Every event in the window, each labelled with what the light will do.
+
+    Deliberately runs through the same filter the watcher uses, so this answers
+    "will it fire for that meeting?" rather than "is that meeting on my
+    calendar?" - which are different questions, and only the first one matters.
+    """
+    widened = deepcopy(config)
+    widened["calendar"]["lookahead_minutes"] = max(int(hours * 60), 1)
+    snapshot = poll_calendar(widened, now, paths)
+    statuses = alert_statuses(config)
+    ignore_all_day = bool(config["calendar"].get("ignore_all_day", True))
+
+    events = []
+    for event in sorted(snapshot.events, key=lambda item: item.start):
+        if event.end <= now:
+            continue
+        skipped_all_day = ignore_all_day and event.is_all_day
+        fires = event.busy_status in statuses and not skipped_all_day
+        payload = {
+            "subject": event.subject,
+            "start": event.start.isoformat(),
+            "end": event.end.isoformat(),
+            "busy_status": event.busy_status,
+            "status_name": BUSY_STATUS_NAMES.get(event.busy_status, str(event.busy_status)),
+            "fires": fires,
+        }
+        if fires:
+            payload["ten_minute_warning_at"] = (event.start - timedelta(minutes=10)).isoformat()
+            payload["five_minute_warning_at"] = (event.start - timedelta(minutes=5)).isoformat()
+        else:
+            payload["ignored_because"] = "all-day event" if skipped_all_day else payload["status_name"]
+        events.append(payload)
+
+    return {
+        "provider": snapshot.provider,
+        "error": snapshot.error,
+        "window_hours": hours,
+        "fetched_at": snapshot.fetched_at.isoformat(),
+        "event_count": len(events),
+        "firing_count": sum(1 for event in events if event["fires"]),
+        "events": events,
     }
 
 
@@ -359,6 +476,22 @@ def _build_parser() -> argparse.ArgumentParser:
     autostart_sub.add_parser("disable", help="Stop the runner and remove the logon task.")
     autostart_sub.add_parser("status", help="Show whether the logon task is registered and running.")
 
+    calendar_parser = subparsers.add_parser("calendar", help="Microsoft 365 / Outlook calendar.")
+    calendar_sub = calendar_parser.add_subparsers(dest="calendar_command", required=True)
+    calendar_sub.add_parser("login", help="Sign in to Microsoft 365 and cache the token.")
+    calendar_sub.add_parser("logout", help="Forget the cached Microsoft 365 sign-in.")
+    calendar_sub.add_parser("status", help="Show the provider, the signed-in account, and the next event.")
+    calendar_upcoming = calendar_sub.add_parser(
+        "upcoming",
+        help="List upcoming events and exactly which ones will move the light.",
+    )
+    calendar_upcoming.add_argument(
+        "--hours",
+        type=float,
+        default=48.0,
+        help="How far ahead to look. Default 48.",
+    )
+
     config_parser = subparsers.add_parser("config", help="Manage blink-light.json.")
     config_sub = config_parser.add_subparsers(dest="config_command", required=True)
     init_parser = config_sub.add_parser("init", help="Write a starter config file.")
@@ -421,11 +554,14 @@ def main(
 
         config = _load_config(resolved_paths)
 
+        if args.command == "calendar":
+            return _run_calendar_command(args, config, resolved_paths, stream, now_factory())
+
         if args.command == "status":
             current = now_factory()
             payload = {
                 "config_path": str(resolved_paths.config_path),
-                "calendar": _calendar_status(config, current),
+                "calendar": _calendar_status(config, current, resolved_paths),
                 "device": _device_status(config, controller_cls=controller_cls),
                 "override": load_override(resolved_paths, current),
                 "timer": _timer_payload(refresh_timer_state(resolved_paths.timer_path, current)),

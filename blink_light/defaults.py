@@ -272,22 +272,54 @@ BUILTIN_SHOW = {
     "respect_quiet_hours": True,
 }
 
+# Outlook's OlBusyStatus values, named so the config below reads as intent
+# rather than as magic numbers.
+OUTLOOK_FREE = 0
+OUTLOOK_TENTATIVE = 1
+OUTLOOK_BUSY = 2
+OUTLOOK_OUT_OF_OFFICE = 3
+OUTLOOK_WORKING_ELSEWHERE = 4
+
+BUSY_STATUS_NAMES = {
+    OUTLOOK_FREE: "Free",
+    OUTLOOK_TENTATIVE: "Tentative",
+    OUTLOOK_BUSY: "Busy",
+    OUTLOOK_OUT_OF_OFFICE: "Out of Office",
+    OUTLOOK_WORKING_ELSEWHERE: "Working Elsewhere",
+}
+
 BUILTIN_CALENDAR = {
     "enabled": True,
+    # "graph" reads the server-side mailbox over Microsoft 365, which is what
+    # the Outlook web app shows, and is the better provider once you have signed
+    # in. The default stays "outlook" only because COM needs no setup at all:
+    # a fresh clone works before anyone has registered an Entra app.
     "provider": "outlook",
+    "graph": {
+        # Your own Entra app registration. See README, "Signing in with
+        # Microsoft 365" - there is no default, because an app id is per-tenant.
+        "client_id": "",
+        # "organizations" works for any work or school account; pin it to your
+        # tenant id to refuse everything else.
+        "tenant_id": "organizations",
+    },
     "auto_watch_on_launch": True,
     "poll_seconds": 30,
+    # Has to stay above the ten-minute warning, or a meeting is still invisible
+    # when its first warning comes due.
     "lookahead_minutes": 15,
     "ignore_all_day": True,
-    "free_statuses": [0],
+    # Only a meeting you are actually expected at moves the light. A Free block
+    # is informational and an Out of Office block is usually the whole day, so
+    # neither one gets a colour or a warning.
+    "alert_statuses": [OUTLOOK_TENTATIVE, OUTLOOK_BUSY],
     "available_color": "#00C853",
-    "free_meeting_color": "#8E24AA",
     "busy_meeting_color": "#D50000",
-    "ten_minute_warning_color": "#FDD835",
-    "two_minute_warning_color": "#FB8C00",
-    "warning_on_ms": 180,
-    "warning_off_ms": 120,
-    "warning_count": 1,
+    # The two warnings differ in hue *and* rhythm, so which one just fired is
+    # readable from across the room without counting blinks: two slow yellow
+    # ones at ten minutes out, four quick orange ones at five.
+    "ten_minute_warning": {"color": "#FDD835", "on_ms": 220, "off_ms": 180, "count": 2},
+    "five_minute_warning": {"color": "#FB8C00", "on_ms": 130, "off_ms": 110, "count": 4},
 }
 
 

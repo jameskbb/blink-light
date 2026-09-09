@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .defaults import default_config
+from .env_file import ENV_FILE_NAME, apply_env_overrides, resolve_env
 from .state import read_json
 
 
@@ -41,6 +42,9 @@ def load_user_config(path: Path) -> dict[str, Any]:
 def build_effective_config(path: Path) -> dict[str, Any]:
     user = load_user_config(path)
     merged = merge_config(user)
+    # Applied last, and never written back: credentials and account ids belong
+    # in the gitignored .env, not in the committed blink-light.json.
+    merged = apply_env_overrides(merged, resolve_env(path.parent / ENV_FILE_NAME))
     validate_config(merged)
     return merged
 
@@ -440,24 +444,51 @@ def _validate_calendar(calendar: Any) -> None:
         raise ConfigError("'calendar' must be an object.")
     if not isinstance(calendar.get("enabled"), bool):
         raise ConfigError("'calendar.enabled' must be a boolean.")
-    if not isinstance(calendar.get("provider"), str):
+    provider = calendar.get("provider")
+    if not isinstance(provider, str):
         raise ConfigError("'calendar.provider' must be a string.")
+    if provider not in ("graph", "outlook"):
+        raise ConfigError(f"'calendar.provider' must be 'graph' or 'outlook', got '{provider}'.")
+    graph = calendar.get("graph")
+    if not isinstance(graph, dict):
+        raise ConfigError("'calendar.graph' must be an object.")
+    for key in ("client_id", "tenant_id"):
+        if not isinstance(graph.get(key), str):
+            raise ConfigError(f"'calendar.graph.{key}' must be a string.")
+    # A missing client_id is deliberately not a config error: it surfaces at
+    # poll time as an error snapshot instead, so an unconfigured Graph provider
+    # degrades to "no events" rather than making every other command refuse to
+    # run. `calendar status` is where you go to see it.
     if not isinstance(calendar.get("auto_watch_on_launch"), bool):
         raise ConfigError("'calendar.auto_watch_on_launch' must be a boolean.")
-    for key in ("poll_seconds", "lookahead_minutes", "warning_on_ms", "warning_off_ms", "warning_count"):
+    for key in ("poll_seconds", "lookahead_minutes"):
         if not isinstance(calendar.get(key), (int, float)) or calendar[key] <= 0:
             raise ConfigError(f"'calendar.{key}' must be a positive number.")
     if not isinstance(calendar.get("ignore_all_day"), bool):
         raise ConfigError("'calendar.ignore_all_day' must be a boolean.")
-    free_statuses = calendar.get("free_statuses")
-    if not isinstance(free_statuses, list) or not all(isinstance(item, int) for item in free_statuses):
-        raise ConfigError("'calendar.free_statuses' must be a list of integers.")
-    for key in (
-        "available_color",
-        "free_meeting_color",
-        "busy_meeting_color",
-        "ten_minute_warning_color",
-        "two_minute_warning_color",
+    statuses = calendar.get("alert_statuses")
+    if (
+        not isinstance(statuses, list)
+        or not statuses
+        or not all(isinstance(item, int) and not isinstance(item, bool) for item in statuses)
     ):
+        raise ConfigError("'calendar.alert_statuses' must be a non-empty list of integers.")
+    for key in ("available_color", "busy_meeting_color"):
         if not isinstance(calendar.get(key), str):
             raise ConfigError(f"'calendar.{key}' must be a string.")
+    for key in ("ten_minute_warning", "five_minute_warning"):
+        _validate_calendar_warning(key, calendar.get(key))
+    # A ten-minute warning needs the meeting to already be in the polling
+    # window, or it can never fire.
+    if float(calendar["lookahead_minutes"]) < 10:
+        raise ConfigError("'calendar.lookahead_minutes' must be at least 10, or the ten-minute warning never fires.")
+
+
+def _validate_calendar_warning(key: str, warning: Any) -> None:
+    if not isinstance(warning, dict):
+        raise ConfigError(f"'calendar.{key}' must be an object.")
+    if not isinstance(warning.get("color"), str):
+        raise ConfigError(f"'calendar.{key}.color' must be a string.")
+    for field in ("on_ms", "off_ms", "count"):
+        if not isinstance(warning.get(field), (int, float)) or warning[field] <= 0:
+            raise ConfigError(f"'calendar.{key}.{field}' must be a positive number.")

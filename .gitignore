@@ -3,3 +3,14 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+
+# Anything account- or machine-specific. The committed blink-light.json stays
+# shareable; personal values (tenant id, client id) go in the .local sibling.
+blink-light.local.json
+*.local.json
+
+# Token caches, in case one is ever pointed at the repo instead of
+# %LOCALAPPDATA%\BlinkLight.
+*token-cache*.json
+*.token
+.env

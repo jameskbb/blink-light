@@ -16,6 +16,7 @@ class AppPaths:
     config_path: Path
     runtime_dir: Path
     calendar_state_path: Path
+    graph_token_path: Path
     chime_state_path: Path
     chime_pid_path: Path
     chime_stop_path: Path
@@ -63,6 +64,9 @@ def build_paths(
         config_path=resolved_config,
         runtime_dir=runtime,
         calendar_state_path=runtime / "calendar-state.json",
+        # Refresh tokens live here. Outside the repo on purpose - the runtime
+        # dir is not a git worktree, so this cannot be committed by accident.
+        graph_token_path=runtime / "graph-token-cache.json",
         chime_state_path=runtime / "chime-state.json",
         chime_pid_path=runtime / "chime.pid",
         chime_stop_path=runtime / "chime.stop",
