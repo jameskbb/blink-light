@@ -26,7 +26,7 @@ full feature/command reference and `docs/ARCHITECTURE.md` /
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Verified: 233 tests, all passing, ~5s. No hardware required — device I/O is
+Verified: 238 tests, all passing, ~5s. No hardware required — device I/O is
 mocked in tests.
 
 ## Shipping

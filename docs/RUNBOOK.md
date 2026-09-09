@@ -324,10 +324,36 @@ schtasks /Create /TN "BlinkLight Hourly Chime"
 
 ### Known limitations
 
-`schtasks` cannot set every property the Task Scheduler GUI can. Two worth knowing:
+`schtasks` cannot set every property the Task Scheduler GUI can. One worth
+knowing:
 
 - **Run task as soon as possible after a missed start** is off. The
   `catch_up_window_seconds` gate covers the common case instead.
-- **Start the task only if on AC power** is on by default, so a laptop on battery
-  may skip the hourly task. Clear it under *Conditions* in `taskschd.msc` if that
-  matters. The always-on loop is unaffected.
+
+### The battery conditions, and why both installers clear them
+
+`schtasks /Create` turns on **Start the task only if the computer is on AC
+power** and **Stop if the computer switches to battery power**. Both are
+exactly backwards here: undocking is when a chime is most likely to be missed,
+and an undocked laptop is the normal case, not the exception.
+
+The failure is silent and easy to misread. The task sits in `Queued` forever,
+`LastTaskResult` stays `0`, nothing is written to the log, and
+`autostart enable` reports:
+
+```json
+{ "installed": true, "started_now": false, "loop": { "running": false } }
+```
+
+which reads like a crashed runner rather than a task Windows declined to start.
+
+`schtasks` has no flag for either setting, so `autostart enable` and
+`chime install` round-trip the task through its own XML and clear both. Each
+reports the result as `runs_on_battery`; if it ever comes back `false`, clear
+the two boxes by hand under *Conditions* in `taskschd.msc`. Check the live
+state with:
+
+```powershell
+(Get-ScheduledTask -TaskName "BlinkLight Autostart").Settings |
+  Select-Object DisallowStartIfOnBatteries, StopIfGoingOnBatteries
+```

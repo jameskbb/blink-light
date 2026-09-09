@@ -14,8 +14,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import logging
 import os
+from pathlib import Path
 import signal
 import subprocess
+import tempfile
 from typing import Any, Callable
 
 from .device import BlinkDeviceController, DeviceError
@@ -489,6 +491,35 @@ def _run_schtasks(arguments: list[str]) -> subprocess.CompletedProcess:
     )
 
 
+def _allow_task_on_battery(task_name: str) -> bool:
+    """Clear the two power conditions schtasks turns on by default.
+
+    A task created with `schtasks /Create` refuses to start on battery and
+    stops if the machine unplugs. That is exactly backwards here: undocking is
+    when the light is most likely to be missed, and the task simply sits in
+    `Queued` forever with no error anywhere. `schtasks` has no flag for either
+    setting, so the task is round-tripped through its own XML.
+
+    Best-effort - a failure here costs a chime on battery, not the install.
+    """
+    exported = _run_schtasks(["/Query", "/TN", task_name, "/XML"])
+    if exported.returncode != 0 or not exported.stdout.strip():
+        return False
+    xml = exported.stdout
+    for element in ("DisallowStartIfOnBatteries", "StopIfGoingOnBatteries"):
+        xml = xml.replace(f"<{element}>true</{element}>", f"<{element}>false</{element}>")
+
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=".xml", encoding="utf-16", delete=False, newline=""
+    ) as handle:
+        handle.write(xml)
+        path = handle.name
+    try:
+        return _run_schtasks(["/Create", "/TN", task_name, "/XML", path, "/F"]).returncode == 0
+    finally:
+        remove_file(Path(path))
+
+
 def _task_status(task_name: str) -> dict[str, Any]:
     if os.name != "nt":
         return {"supported": False, "installed": False, "task_name": task_name}
@@ -587,6 +618,7 @@ def install_autostart_task(paths: AppPaths, start_now: bool = True) -> dict[str,
     )
     if completed.returncode != 0:
         raise RuntimeError((completed.stderr or completed.stdout).strip() or "schtasks /Create failed.")
+    on_battery = _allow_task_on_battery(AUTOSTART_TASK_NAME)
 
     started = False
     loop = {"running": False, "pid": None}
@@ -605,6 +637,7 @@ def install_autostart_task(paths: AppPaths, start_now: bool = True) -> dict[str,
         "trigger": "at logon",
         "action": f'wscript.exe "{script}"',
         "started_now": started,
+        "runs_on_battery": on_battery,
         "loop": loop,
         "replaced_running_loop": was_running,
     }
@@ -649,6 +682,7 @@ def install_scheduled_task(config: dict[str, Any], paths: AppPaths) -> dict[str,
         "installed": True,
         "task_name": TASK_NAME,
         "runs_at_minute": minute,
+        "runs_on_battery": _allow_task_on_battery(TASK_NAME),
         "action": f'wscript.exe "{script}"',
     }
 
