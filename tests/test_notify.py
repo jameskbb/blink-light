@@ -6,7 +6,7 @@ from blink_light.config import ConfigError, merge_config, validate_config
 from blink_light.defaults import (
     AGENT_BLOCKED_COLOR,
     AGENT_DONE_COLOR,
-    CLAUDE_ORANGE,
+    HERDR_BLUE,
     default_config,
     scale_brightness,
     scene_duration_seconds,
@@ -122,8 +122,8 @@ class BrightnessTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             scale_brightness("#FFF", 0.5)
 
-    def test_agent_done_is_claude_orange_at_half(self) -> None:
-        self.assertEqual(AGENT_DONE_COLOR, scale_brightness(CLAUDE_ORANGE, 0.5))
+    def test_agent_done_is_herdr_blue_at_half(self) -> None:
+        self.assertEqual(AGENT_DONE_COLOR, scale_brightness(HERDR_BLUE, 0.5))
         self.assertEqual(
             default_config()["scenes"]["agent_done_scene"]["steps"][0]["color"],
             AGENT_DONE_COLOR,

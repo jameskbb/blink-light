@@ -26,11 +26,11 @@ and silence it with `herdr plugin disable blinklight.agent-status`.
 
 | Agent finishes | Light does | Colour | Event |
 |---|---|---|---|
-| → `idle` or `done` | Two slow breaths | Claude orange at 50% (`#6F3A2B`) | `agent_done` |
+| → `idle` or `done` | Two slow breaths | Herdr blue at 50% (`#28627C`) | `agent_done` |
 | → `blocked` | Three quicker breaths | Red at 50% (`#801E00`) | `agent_blocked` |
 | → `working` | Nothing | — | — |
 
-Colours are derived, not hand-mixed: `scale_brightness("#DE7356", 0.5)`. Scaling all
+Colours are derived, not hand-mixed: `scale_brightness("#4FC3F7", 0.5)`. Scaling all
 three channels by the same factor keeps the hue recognisable, where clamping or
 blending toward grey would shift it. Full brightness reads as an alarm on a light
 that sits in your peripheral vision all day, hence the 50%.
@@ -39,7 +39,7 @@ Done and blocked differ in **both hue and rhythm**, so they stay distinguishable
 at a glance and to a colour-blind viewer. Every step is a fade rather than a jump,
 so they read as breaths instead of blinks.
 
-To change the brightness or colour, edit `CLAUDE_ORANGE` / `NOTIFY_BRIGHTNESS` in
+To change the brightness or colour, edit `HERDR_BLUE` / `NOTIFY_BRIGHTNESS` in
 `blink_light/defaults.py` and re-run `config init --force`, or just set the scene
 colours directly in `blink-light.json`.
 

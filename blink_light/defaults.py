@@ -30,11 +30,12 @@ def scale_brightness(color: str, factor: float) -> str:
     return "#{:02X}{:02X}{:02X}".format(*(round(value * factor) for value in channels))
 
 
-# Claude's signature orange. Dimmed for notifications: a light on the desk is
-# in peripheral vision all day, and full brightness reads as an alarm.
-CLAUDE_ORANGE = "#DE7356"
+# Herdr's own light blue, so the desk light and the Herdr UI agree on what
+# "complete" looks like. Dimmed for notifications: a light on the desk is in
+# peripheral vision all day, and full brightness reads as an alarm.
+HERDR_BLUE = "#4FC3F7"
 NOTIFY_BRIGHTNESS = 0.5
-AGENT_DONE_COLOR = scale_brightness(CLAUDE_ORANGE, NOTIFY_BRIGHTNESS)
+AGENT_DONE_COLOR = scale_brightness(HERDR_BLUE, NOTIFY_BRIGHTNESS)
 # Blocked shares the palette but sits redder, so the two are told apart by hue
 # as well as by rhythm.
 AGENT_BLOCKED_COLOR = scale_brightness("#FF3D00", NOTIFY_BRIGHTNESS)
