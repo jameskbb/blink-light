@@ -1,9 +1,59 @@
 from __future__ import annotations
 
+from pathlib import Path
 import unittest
 
-from blink_light.config import ConfigError, merge_config, validate_config
+from blink_light.config import ConfigError, build_effective_config, merge_config, validate_config
 from blink_light.defaults import default_config
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+class CommittedConfigTests(unittest.TestCase):
+    """The light runs the merged config, not defaults.py.
+
+    blink-light.json was generated from the defaults and pins every scene by
+    value, so changing a colour in defaults.py alone leaves the real light on
+    the old one - silently, because the rest of the suite only ever looks at
+    default_config(). That happened: agent_done stayed dim orange for an hour
+    after the blue landed. These compare the two.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.effective = build_effective_config(REPO_ROOT / "blink-light.json")
+        cls.defaults = default_config()
+
+    def test_no_scene_pins_a_stale_colour(self) -> None:
+        for name, scene in self.defaults["scenes"].items():
+            if name not in self.effective["scenes"]:
+                continue
+            with self.subTest(scene=name):
+                self.assertEqual(
+                    [step["color"] for step in self.effective["scenes"][name]["steps"]],
+                    [step["color"] for step in scene["steps"]],
+                    f"blink-light.json pins colours for '{name}' that defaults.py no longer uses",
+                )
+
+    def test_no_preset_pins_a_stale_colour(self) -> None:
+        for name, preset in self.defaults["presets"].items():
+            if "color" not in preset or name not in self.effective["presets"]:
+                continue
+            with self.subTest(preset=name):
+                self.assertEqual(self.effective["presets"][name].get("color"), preset["color"])
+
+    def test_the_committed_calendar_colours_match_the_defaults(self) -> None:
+        for key in ("available_color", "busy_meeting_color"):
+            with self.subTest(key=key):
+                self.assertEqual(
+                    self.effective["calendar"][key], self.defaults["calendar"][key]
+                )
+        for key in ("ten_minute_warning", "five_minute_warning"):
+            with self.subTest(key=key):
+                self.assertEqual(
+                    self.effective["calendar"][key]["color"],
+                    self.defaults["calendar"][key]["color"],
+                )
 
 
 class ConfigTests(unittest.TestCase):
