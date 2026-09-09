@@ -5,7 +5,8 @@ hourly chime, a daily rainbow light show, named daily alarms (standup), AI-agent
 notifications via the Herdr plugin, Outlook/Microsoft-Graph calendar colours
 with pre-meeting warnings, timers, and local rules. See `README.md` for the
 full feature/command reference and `docs/ARCHITECTURE.md` /
-`docs/RUNBOOK.md` for how scheduling works and how to operate it.
+`docs/RUNBOOK.md` for how scheduling works and how to operate it, and
+`docs/EFFECTS.md` for scene-design ideas with pasteable JSON.
 
 ## Running it
 
@@ -25,8 +26,14 @@ full feature/command reference and `docs/ARCHITECTURE.md` /
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Verified: 220 tests, all passing, ~5s. No hardware required — device I/O is
+Verified: 233 tests, all passing, ~5s. No hardware required — device I/O is
 mocked in tests.
+
+## Shipping
+
+Commit straight to `main` and push. This is a single-maintainer repo; a PR
+here only parks finished work behind a gate nobody reads. The test suite is
+the gate — run it before pushing.
 
 ## Conventions
 

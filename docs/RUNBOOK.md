@@ -167,6 +167,18 @@ A `Loop started` with no matching `Loop stopped` means it is still running. A
 stack trace means an effect failed — the loop logs and carries on rather than
 dying, so one bad device call does not cost you the day's schedule.
 
+An undocked machine is the exception, and gets one line rather than a
+traceback:
+
+```
+09:00:00 INFO [chime] Chime skipped, device not connected: Configured blink(1) serial '12ab34cd' is not connected.
+```
+
+One line per hour, however many times the catch-up window retries that slot.
+It is a note, not a fault: plug the light back in and the next slot chimes.
+Anything that is *not* a missing device still gets its full stack trace, which
+is the point — the tracebacks left in the log are the ones worth reading.
+
 ### The light does nothing at the top of the hour
 
 Work down this list:

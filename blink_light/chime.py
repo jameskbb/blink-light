@@ -18,7 +18,7 @@ import signal
 import subprocess
 from typing import Any, Callable
 
-from .device import BlinkDeviceController
+from .device import BlinkDeviceController, DeviceError
 from .paths import AppPaths, ensure_runtime_dirs
 from .rules import is_between_times
 from .state import is_process_running, read_json, remove_file, write_json
@@ -351,6 +351,23 @@ def run_chime_loop(
     alarms = 0
     iterations = 0
     stopped_by = None
+    # An undocked laptop is not a fault - the light is simply not there. Each
+    # missed slot is retried once a minute through the catch-up window, so a
+    # stack trace per attempt buried the real failures under five identical
+    # copies. Report an absent device once per hour instead, and keep the full
+    # traceback for everything else.
+    absent_reported_for: str | None = None
+
+    def log_effect_failure(label: str, error: BaseException, at: datetime) -> None:
+        nonlocal absent_reported_for
+        if isinstance(error, DeviceError):
+            hour = at.replace(minute=0, second=0, microsecond=0).isoformat()
+            if absent_reported_for != hour:
+                absent_reported_for = hour
+                LOGGER.info("%s skipped, device not connected: %s", label, error)
+            return
+        LOGGER.error("%s failed", label, exc_info=error)
+
     try:
         while True:
             if paths.chime_stop_path.exists():
@@ -379,8 +396,8 @@ def run_chime_loop(
                 )["fired"]:
                     fired += 1
                     LOGGER.info("Fired chime")
-            except Exception:
-                LOGGER.exception("Chime failed")
+            except Exception as error:
+                log_effect_failure("Chime", error, current)
             try:
                 if maybe_fire_show(
                     config,
@@ -391,8 +408,8 @@ def run_chime_loop(
                 )["fired"]:
                     shows += 1
                     LOGGER.info("Played show")
-            except Exception:
-                LOGGER.exception("Show failed")
+            except Exception as error:
+                log_effect_failure("Show", error, current)
             try:
                 for result in fire_due_alarms(
                     config,
@@ -403,8 +420,8 @@ def run_chime_loop(
                 ):
                     alarms += 1
                     LOGGER.info("Fired alarm %s", result["alarm"])
-            except Exception:
-                LOGGER.exception("Alarm failed")
+            except Exception as error:
+                log_effect_failure("Alarm", error, current)
 
             after = now_factory()
             candidates = [

@@ -2,7 +2,7 @@
 
 Windows-first [`blink(1)`](https://blink1.thingm.com/) utility. Turns a USB light on your desk into an ambient status display: standup alerts, an hourly chime, a daily light show, AI-agent notifications, Outlook-calendar colours, timers, and local rules — with a self-bootstrapping batch launcher and opt-in startup registration.
 
-**Docs:** [Architecture](docs/ARCHITECTURE.md) — how the scheduling works and what it costs to extend · [Runbook](docs/RUNBOOK.md) — setup, verification, troubleshooting, teardown · [Herdr](docs/HERDR.md) — flash the light when an AI agent finishes.
+**Docs:** [Architecture](docs/ARCHITECTURE.md) — how the scheduling works and what it costs to extend · [Runbook](docs/RUNBOOK.md) — setup, verification, troubleshooting, teardown · [Herdr](docs/HERDR.md) — flash the light when an AI agent finishes · [Effects](docs/EFFECTS.md) — scene ideas that read well on a two-LED light, with pasteable JSON.
 
 ---
 
