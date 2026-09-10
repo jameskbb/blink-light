@@ -451,3 +451,7 @@ watcher repaints the underlying state on its next tick.
 ```bat
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+## License
+
+[MIT](LICENSE).
