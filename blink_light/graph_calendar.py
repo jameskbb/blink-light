@@ -207,9 +207,12 @@ def fetch_graph_events(
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
-        # Ask Graph to return times already in the local zone, so the offsets
-        # the parser sees match the watcher's clock.
-        "Prefer": f'outlook.timezone="{_windows_timezone_name()}"',
+        # Always UTC. Graph wants a Windows zone ID here ("Central Standard
+        # Time"), but Python on Windows only exposes the display name, which
+        # flips to "Central Daylight Time" from March to November - and Graph
+        # rejects that with a 400, so the calendar went silent all summer.
+        # UTC is accepted everywhere; _graph_datetime converts back to local.
+        "Prefer": 'outlook.timezone="UTC"',
     }
     payload = (fetcher or _get_json)(f"{GRAPH_CALENDAR_VIEW}?{query}", headers)
     return payload.get("value", [])
@@ -225,12 +228,6 @@ def _get_json(url: str, headers: dict[str, str]) -> dict[str, Any]:
         raise RuntimeError(f"Graph returned {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:  # pragma: no cover - network path
         raise RuntimeError(f"Could not reach Microsoft Graph: {exc.reason}") from exc
-
-
-def _windows_timezone_name() -> str:
-    """The local zone, named the way Graph's Prefer header wants it."""
-    local = datetime.now().astimezone().tzinfo
-    return str(local) if local else "UTC"
 
 
 def graph_rows_to_items(rows: list[dict[str, Any]], include_cancelled: bool = False) -> list[dict[str, Any]]:
@@ -267,6 +264,11 @@ def _graph_datetime(payload: dict[str, Any] | None) -> str:
         head, _, fraction = text.partition(".")
         text = f"{head}.{fraction[:6]}"
     zone = payload.get("timeZone", "")
-    if zone.upper() == "UTC" and not text.endswith("Z"):
-        text = f"{text}+00:00"
+    if zone.upper() == "UTC":
+        # fetch_graph_events always asks for UTC. Converting to local keeps
+        # Graph events in the same shape as the Outlook provider's, so
+        # `calendar upcoming` reads in the zone you are actually in.
+        if not text.endswith("Z"):
+            text = f"{text}+00:00"
+        return datetime.fromisoformat(text).astimezone().isoformat()
     return text

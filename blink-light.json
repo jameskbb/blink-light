@@ -43,7 +43,7 @@
     "ignore_all_day": true,
     "lookahead_minutes": 15,
     "poll_seconds": 30,
-    "provider": "outlook",
+    "provider": "graph",
     "ten_minute_warning": {
       "color": "#FDD835",
       "count": 2,

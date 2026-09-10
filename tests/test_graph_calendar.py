@@ -69,13 +69,17 @@ class GraphMappingTests(unittest.TestCase):
         self.assertEqual(events[0].start.hour, 11)
         self.assertIsNotNone(events[0].start.tzinfo)
 
-    def test_utc_rows_keep_their_offset(self) -> None:
+    def test_utc_rows_keep_the_right_moment_in_time(self) -> None:
+        # Shown in local time, like the Outlook provider, but the instant is
+        # what the warnings are computed from - so that is what must survive.
         row = graph_row(
             start={"dateTime": "2026-09-09T16:00:00.0000000", "timeZone": "UTC"},
             end={"dateTime": "2026-09-09T17:00:00.0000000", "timeZone": "UTC"},
         )
         events = parse_events(graph_rows_to_items([row]))
-        self.assertEqual(events[0].start.utcoffset(), timedelta(0))
+        self.assertEqual(events[0].start, datetime(2026, 9, 9, 16, 0, tzinfo=timezone.utc))
+        self.assertEqual(events[0].end, datetime(2026, 9, 9, 17, 0, tzinfo=timezone.utc))
+        self.assertIsNotNone(events[0].start.tzinfo)
 
     def test_an_invitation_you_did_not_organise_still_counts(self) -> None:
         """The case that started this: invited, not organised, still Busy."""
