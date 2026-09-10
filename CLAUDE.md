@@ -6,7 +6,9 @@ notifications via the Herdr plugin, Outlook/Microsoft-Graph calendar colours
 with pre-meeting warnings, timers, and local rules. See `README.md` for the
 full feature/command reference and `docs/ARCHITECTURE.md` /
 `docs/RUNBOOK.md` for how scheduling works and how to operate it, and
-`docs/EFFECTS.md` for scene-design ideas with pasteable JSON.
+`docs/EFFECTS.md` for scene-design ideas with pasteable JSON. `docs/MY-SETUP.md`
+is the author's own schedule and setup — keep it in step with the defaults and
+free of anything identifying (no serials, IDs, meeting names or paths).
 
 ## Running it
 

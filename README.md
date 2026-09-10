@@ -1,14 +1,31 @@
 # blink-light
 
-Windows-first [`blink(1)`](https://blink1.thingm.com/) utility. Turns a USB light on your desk into an ambient status display: standup alerts, an hourly chime, a daily light show, AI-agent notifications, Outlook-calendar colours, timers, and local rules — with a self-bootstrapping batch launcher and opt-in startup registration.
+Turn a [`blink(1)`](https://blink1.thingm.com/) USB light into an ambient status display for your desk. It warns you before meetings and glows red while you're in one, chimes on the hour, plays a short rainbow at the end of the day, fires named daily alarms, and lights up when an AI coding agent finishes or gets stuck.
 
-**Docs:** [Architecture](docs/ARCHITECTURE.md) — how the scheduling works and what it costs to extend · [Runbook](docs/RUNBOOK.md) — setup, verification, troubleshooting, teardown · [Herdr](docs/HERDR.md) — flash the light when an AI agent finishes · [Effects](docs/EFFECTS.md) — scene ideas that read well on a two-LED light, with pasteable JSON.
+Windows-first, written in Python, no admin rights needed. One batch file sets everything up.
+
+> **The defaults are one person's working day** — standup alerts at 08:13, dark from 17:00. Change any of them in your own config (see [Config](#config)). [My setup](docs/MY-SETUP.md) shows how the author runs it and why.
 
 ---
 
-## Quick Start
+## Requirements
 
-Everything runs through `blink-light.bat` from the repo root. The first run creates `.venv`, installs `requirements.txt`, then dispatches to the CLI — no separate install step.
+- Windows 10 or 11
+- A blink(1) USB light. Effects that use both LEDs need an mk2 or newer.
+- Python 3.12 or newer (tested on 3.12 and 3.13), on `PATH` or through the `py` launcher
+- Optional, for calendar colours: a Microsoft 365 account (Graph), or the classic Outlook desktop app (COM)
+
+## Install
+
+```bat
+git clone https://github.com/jameskbb/blink-light.git
+cd blink-light
+blink-light.bat devices
+```
+
+Everything runs through `blink-light.bat` from the repo root. The first run creates `.venv`, installs `requirements.txt`, then runs the command — there is no separate install step.
+
+## Quick Start
 
 ```bat
 blink-light.bat devices
@@ -23,9 +40,19 @@ Running `blink-light.bat` with no arguments prints a welcome — or, if `calenda
 
 For full first-time setup — installing the scheduled tasks, verifying the chime and show actually fire, troubleshooting — see the [Runbook](docs/RUNBOOK.md).
 
+## Docs
+
+| Page | Read it when you want to |
+| --- | --- |
+| [Runbook](docs/RUNBOOK.md) | set up the scheduled tasks, check they fire, troubleshoot, or remove everything |
+| [Architecture](docs/ARCHITECTURE.md) | understand how the scheduling works, or add a feature |
+| [Effects](docs/EFFECTS.md) | design your own flashes — with pasteable scenes |
+| [Herdr](docs/HERDR.md) | make the light react when an AI coding agent finishes or gets blocked |
+| [My setup](docs/MY-SETUP.md) | see how the author runs it day to day |
+
 ## What the light does
 
-Everything the defaults do, in one place. Values are the built-in defaults from
+Everything a fresh install does, in one place. Values are the built-in defaults from
 [`blink_light/defaults.py`](blink_light/defaults.py), mirrored in
 [`blink-light.example.json`](blink-light.example.json); your own
 `blink-light.json` can override any of them.
@@ -65,14 +92,14 @@ default) moves the light.
 
 ### Quiet hours
 
-**17:00 – 07:00** the light is off, and the chime and alarms stay silent —
-the desk is empty from 5pm, so nothing flashes at it. Each effect can opt out
-with `respect_quiet_hours: false`.
+**17:00 – 07:00** by default the light is off, and the chime and alarms stay
+silent. Each effect can opt out with `respect_quiet_hours: false`, and the
+window itself is `settings.quiet_hours`.
 
-The daily show is the one that does. It fires at exactly 17:00 and the window
-is inclusive of its start, so respecting quiet hours would retire the rainbow
-permanently; it opts out and still plays. That is also the last thing the
-light does before going dark for the night.
+The daily show is the one that opts out. It fires at exactly 17:00 and the
+window is inclusive of its start, so respecting quiet hours would retire the
+rainbow permanently; instead it still plays, as the last thing the light does
+before going dark.
 
 Because 08:13 and 08:15 sit outside the window, the standup alerts are
 unaffected.
@@ -148,6 +175,7 @@ smooth even when the machine is busy.
 | `respect_quiet_hours` | `false` | Off by default here: 17:00 is the first minute of quiet hours, so respecting them would mean the show never plays. |
 
 `show now --force` ignores quiet hours, the catch-up window and today's guard.
+Want a different show? [Effects](docs/EFFECTS.md) has a sunrise ramp that fits the cap.
 
 ## Daily Alarms
 
@@ -244,7 +272,8 @@ the task; `--no-start` registers the task but waits for the next logon.
 
 Keep both `autostart enable` (the live runner) and `chime install` (the
 stateless backstop) — they cannot double-pulse, and together they cover a
-dead loop or a machine asleep at the top of the hour. See
+dead loop or a machine asleep at the top of the hour. Both tasks are allowed
+to start on battery, so an undocked laptop still keeps the schedule. See
 [Architecture](docs/ARCHITECTURE.md#the-three-moving-parts) for why.
 
 `startup enable` is the older Startup-folder mechanism; it launches the full
@@ -263,14 +292,15 @@ the resting-colour table above gets its data.
 | `graph` | Your Microsoft 365 mailbox on the server — the same data the Outlook web app shows | One-time Entra app registration, then `calendar login` |
 | `outlook` | The classic Outlook desktop client's local cache, over COM | None |
 
-**Use `graph` if you live in the Outlook PWA.** The COM provider only sees
+**Use `graph` if you live in the Outlook web app.** The COM provider only sees
 what the classic desktop profile has cached locally, which can silently omit
 meetings — in particular ones you were invited to but did not organise. Graph
 reads the mailbox itself, so what the light sees is what the web app sees.
 
 ### Signing in with Microsoft 365
 
-One-time, about five minutes:
+One-time, about five minutes. You register your own app, so nothing here
+depends on anyone else's tenant:
 
 1. Open [Entra app registrations](https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) → **New registration**. Name it `blink-light`, and under **Supported account types** pick *Accounts in this organizational directory only*.
 2. Under **Redirect URI**, choose **Public client/native** and enter `http://localhost`.
@@ -323,7 +353,7 @@ Credentials never live in the repo. Three layers enforce that:
 | Layer | What it does |
 | --- | --- |
 | `.env` (gitignored) | Where ids and credentials actually live. `.env.template` documents the keys and is the only `.env.*` file that is committed. |
-| `.gitignore` | Ignores `.env`, `*.local.json`, `*token-cache*.json`, `*.token`. |
+| `.gitignore` | Ignores `.env`, `blink-light.json`, `*.local.json`, `*token-cache*.json`, `*.token`. |
 | `.githooks/pre-commit` | Blocks a commit that stages one of those files — even with `git add -f` — or that adds a credential-shaped value to any file. |
 
 Install the hook once per clone:
@@ -404,6 +434,23 @@ a device serial or a personal schedule cannot end up in a push. Start from
 `config init` writes with no device attached — or leave the file out and run on
 the built-in defaults.
 
+You only need the keys you want to change. The file is merged over the
+defaults, so this is a complete config that moves the standup alerts and keeps
+the light on until 18:00:
+
+```json
+{
+  "alarms": [
+    { "name": "standup_warning", "at": "09:28", "action": { "scene": "standup_warning_scene" } },
+    { "name": "standup_now", "at": "09:30", "action": { "scene": "standup_now_scene" } }
+  ],
+  "settings": { "quiet_hours": { "start": "18:00" } }
+}
+```
+
+After editing, run `blink-light.bat config validate`, then
+`blink-light.bat autostart enable` so the running loop picks it up.
+
 Its top-level keys:
 `device`, `calendar`, `chime`, `show`, `alarms`, `notify`, `presets`,
 `scenes`, `routines`, `rules`, `settings`.
@@ -443,14 +490,21 @@ watcher repaints the underlying state on its next tick.
 | `integrations/herdr/` | Herdr plugin: manifest plus its event handler. |
 | `blink_light/watcher.py` | Background loop, action precedence. |
 | `blink_light/cli.py` | Argument parsing and command dispatch. |
-| `docs/` | Architecture and runbook. |
+| `docs/` | Runbook, architecture, effects, the Herdr integration, and the author's setup. |
 | `tests/` | `unittest` suite, no hardware required. |
 
-## Tests
+## Working on it
 
 ```bat
+git config core.hooksPath .githooks
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+The suite needs no hardware — device I/O is mocked — and runs in about five
+seconds. It also checks the docs against the code: the schedule tables above
+must match the defaults, and `blink-light.example.json` must equal
+`default_config()`. Change a default and the suite tells you which docs to
+update.
 
 ## License
 
