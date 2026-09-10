@@ -328,6 +328,7 @@ def run_chime_loop(
     import time as _time
 
     from .alarms import fire_due_alarms, seconds_until_next_alarm
+    from .github import GitHubPoller
     from .show import maybe_fire_show, seconds_until_next_slot as show_seconds_until, show_time
 
     sleep_fn = sleep or _time.sleep
@@ -353,6 +354,7 @@ def run_chime_loop(
     alarms = 0
     iterations = 0
     stopped_by = None
+    github = GitHubPoller(config, paths)
     # An undocked laptop is not a fault - the light is simply not there. Each
     # missed slot is retried once a minute through the catch-up window, so a
     # stack trace per attempt buried the real failures under five identical
@@ -425,6 +427,11 @@ def run_chime_loop(
             except Exception as error:
                 log_effect_failure("Alarm", error, current)
 
+            try:
+                github.poll(now=current, controller_cls=controller_cls)
+            except Exception as error:
+                log_effect_failure("GitHub", error, current)
+
             after = now_factory()
             candidates = [
                 seconds_until_next_slot(after, minute),
@@ -433,6 +440,9 @@ def run_chime_loop(
             next_alarm = seconds_until_next_alarm(config, after)
             if next_alarm is not None:
                 candidates.append(next_alarm)
+            next_github = github.seconds_until_next_poll(after)
+            if next_github is not None:
+                candidates.append(next_github)
             remaining = min(candidates)
             # Sleep in slices so a stop request is noticed within a couple of
             # seconds rather than up to a minute later. Only the stop file is

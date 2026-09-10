@@ -39,6 +39,7 @@ AGENT_DONE_COLOR = scale_brightness(HERDR_BLUE, NOTIFY_BRIGHTNESS)
 # Blocked shares the palette but sits redder, so the two are told apart by hue
 # as well as by rhythm.
 AGENT_BLOCKED_COLOR = scale_brightness("#FF3D00", NOTIFY_BRIGHTNESS)
+CI_FAILED_COLOR = scale_brightness("#FF7800", NOTIFY_BRIGHTNESS)
 
 # Standup alerts. Full brightness, unlike the notification colours above: these
 # are meant to catch your eye across the room, not sit quietly in the corner.
@@ -92,6 +93,18 @@ BUILTIN_PRESETS = {
 
 BUILTIN_SCENES = {
     "rainbow_swirl": rainbow_swirl_scene(),
+    # Paired thumps with a rest distinguish CI from three even agent breaths.
+    "ci_failed_scene": {
+        "loop": False,
+        "repeat": 2,
+        "steps": [
+            {"color": CI_FAILED_COLOR, "seconds": 0.12},
+            {"color": "#000000", "seconds": 0.12},
+            {"color": CI_FAILED_COLOR, "seconds": 0.18},
+            {"color": "#000000", "seconds": 0.18},
+            {"color": "#000000", "seconds": 0.60},
+        ],
+    },
     # Notification scenes are short and non-looping: they must finish on their
     # own so the light returns to whatever the watcher was showing.
     #
@@ -241,8 +254,16 @@ BUILTIN_CHIME = {
 }
 
 BUILTIN_NOTIFY = {
+    "ci_failed": {"scene": "ci_failed_scene"},
     "agent_done": {"scene": "agent_done_scene"},
     "agent_blocked": {"scene": "agent_blocked_scene"},
+}
+
+BUILTIN_GITHUB = {
+    "enabled": False,
+    "poll_seconds": 60,
+    "respect_quiet_hours": True,
+    "actions_failed_event": "ci_failed",
 }
 
 BUILTIN_ALARMS = [
@@ -333,6 +354,7 @@ def default_config(serial: str | None = None) -> dict:
     payload = {
         "device": {"serial": serial},
         "calendar": deepcopy(BUILTIN_CALENDAR),
+        "github": deepcopy(BUILTIN_GITHUB),
         "chime": deepcopy(BUILTIN_CHIME),
         "show": deepcopy(BUILTIN_SHOW),
         "alarms": deepcopy(BUILTIN_ALARMS),

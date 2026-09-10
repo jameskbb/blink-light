@@ -72,6 +72,7 @@ Everything a fresh install does, in one place. Values are the built-in defaults 
 | --- | --- | --- | --- | --- |
 | AI agent finishes ([Herdr](docs/HERDR.md)) | 2 slow breaths | 🔵 `#28627C` — Herdr blue at 50% | 1.80s | `notify run agent_done` |
 | AI agent blocked | 3 quicker breaths | 🔴 `#801E00` — dim red | 1.26s | `notify run agent_blocked` |
+| GitHub Actions run you triggered fails (opt-in) | 2 pairs of heartbeat thumps | 🟠 `#803C00` — dim orange-red | 2.40s | `notify run ci_failed` |
 
 ### The resting colour (watcher only, opt-in)
 
@@ -254,6 +255,43 @@ finishes or gets blocked.
 herdr plugin link <repo>\integrations\herdr
 ```
 
+## GitHub Actions Failures
+
+The scheduler can flash `ci_failed` for failed workflow runs you triggered, across
+repositories. This integration is off by default. It uses your existing GitHub CLI
+login and adds no Python dependency.
+
+1. Run `gh auth status --hostname github.com` to check your login.
+2. Add `"github": { "enabled": true }` to your local `blink-light.json`.
+3. Run `blink-light.bat config validate`.
+4. Run `blink-light.bat github check --dry-run` to preview the feed without a flash or state change.
+5. Run `blink-light.bat autostart enable` to restart the scheduler with the new config.
+
+The first successful poll records existing notifications as a baseline and flashes
+nothing. Later polls detect new failures by notification ID and update timestamp.
+A failed rerun can flash again. Quiet hours consume failures silently, so they
+do not replay in the morning. An absent device also consumes the event.
+
+| Config key | Default | Meaning |
+| --- | --- | --- |
+| `github.enabled` | `false` | Enable polling in the scheduler. |
+| `github.poll_seconds` | `60` | Minimum interval in seconds. GitHub can require a longer interval. |
+| `github.respect_quiet_hours` | `true` | Consume events silently during quiet hours. |
+| `github.actions_failed_event` | `"ci_failed"` | Event name in `notify`. |
+
+`github status` shows the login source, last poll, watermark, and last flash.
+`github check` polls immediately when enabled. `--dry-run` shows `matches` and
+`would_flash` without saving state or touching the light. `github test` plays the
+configured event once, even when polling is disabled.
+
+The feed contains the 50 most recently updated notifications. More than 50 updates
+between polls can hide a failure. GitHub must create a notification for the run.
+The integration never marks notifications read. The token stays in memory and
+never enters the config or state file.
+
+Conditional requests use `Last-Modified`. Unchanged feeds return HTTP 304 without
+consuming the API rate limit. See [GitHub notifications](https://docs.github.com/en/rest/activity/notifications).
+
 ## Start It At Boot
 
 ```bat
@@ -413,6 +451,11 @@ blink-light.bat calendar login
 blink-light.bat calendar status
 blink-light.bat calendar upcoming --hours 24
 blink-light.bat calendar logout
+
+blink-light.bat github status
+blink-light.bat github check --dry-run
+blink-light.bat github check
+blink-light.bat github test
 
 blink-light.bat config init
 blink-light.bat config validate

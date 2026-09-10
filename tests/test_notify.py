@@ -32,7 +32,7 @@ class NotifyTests(unittest.TestCase):
         self.config = default_config()
 
     def test_default_events_are_present(self) -> None:
-        self.assertEqual(list_events(self.config), ["agent_blocked", "agent_done"])
+        self.assertEqual(list_events(self.config), ["agent_blocked", "agent_done", "ci_failed"])
 
     def test_events_resolve_to_scenes(self) -> None:
         self.assertEqual(resolve_event(self.config, "agent_done"), {"scene": "agent_done_scene"})
@@ -163,4 +163,3 @@ class NotifyConfigTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import math
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,10 @@ def build_effective_config(path: Path) -> dict[str, Any]:
 
 def merge_config(user: dict[str, Any], detected_serial: str | None = None) -> dict[str, Any]:
     base = default_config(serial=detected_serial)
+    if "github" in user:
+        if not isinstance(user["github"], dict):
+            raise ConfigError("'github' must be an object.")
+        base["github"] = _deep_merge(base["github"], user["github"])
     if "device" in user:
         if not isinstance(user["device"], dict):
             raise ConfigError("'device' must be an object.")
@@ -99,6 +104,7 @@ def validate_config(payload: dict[str, Any]) -> None:
     for key in (
         "device",
         "calendar",
+        "github",
         "chime",
         "show",
         "alarms",
@@ -125,6 +131,7 @@ def validate_config(payload: dict[str, Any]) -> None:
         raise ConfigError("'notify' must be an object.")
     for name, action in payload["notify"].items():
         _validate_action(action, f"notify.{name}")
+    _validate_github(payload["github"], payload["notify"])
     if not isinstance(payload["presets"], dict):
         raise ConfigError("'presets' must be an object.")
     if not isinstance(payload["scenes"], dict):
@@ -320,6 +327,28 @@ def _validate_action_references(payload: dict[str, Any]) -> None:
         walk(rule["action"], f"rules[{index}].action")
     walk(payload["settings"]["default_action"], "settings.default_action")
     walk(payload["settings"]["quiet_hours"]["action"], "settings.quiet_hours.action")
+
+
+def _validate_github(github: Any, events: dict[str, Any]) -> None:
+    if not isinstance(github, dict):
+        raise ConfigError("'github' must be an object.")
+    allowed = {"enabled", "poll_seconds", "respect_quiet_hours", "actions_failed_event"}
+    if set(github) - allowed:
+        raise ConfigError("Unknown github setting. Credentials belong in the gh login, not config.")
+    for key in ("enabled", "respect_quiet_hours"):
+        if not isinstance(github.get(key), bool):
+            raise ConfigError(f"'github.{key}' must be a boolean.")
+    interval = github.get("poll_seconds")
+    if (
+        isinstance(interval, bool)
+        or not isinstance(interval, (int, float))
+        or not math.isfinite(interval)
+        or interval < 60
+    ):
+        raise ConfigError("'github.poll_seconds' must be a finite number of at least 60.")
+    event = github.get("actions_failed_event")
+    if not isinstance(event, str) or event not in events:
+        raise ConfigError("'github.actions_failed_event' must name an event in notify.")
 
 
 def _validate_chime(chime: Any) -> None:

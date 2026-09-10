@@ -34,6 +34,7 @@ from .chime import (
 from .alarms import alarm_status, fire_alarm, fire_due_alarms, find_alarm
 from .defaults import BUSY_STATUS_NAMES, default_config
 from .notify import NotifyError, fire_notify, list_events, resolve_event
+from .github import GitHubPoller, github_status
 from .show import fire_show, maybe_fire_show, show_status
 from .device import BlinkDeviceController, DeviceError
 from .paths import AppPaths, build_paths, ensure_runtime_dirs
@@ -476,6 +477,13 @@ def _build_parser() -> argparse.ArgumentParser:
     autostart_sub.add_parser("disable", help="Stop the runner and remove the logon task.")
     autostart_sub.add_parser("status", help="Show whether the logon task is registered and running.")
 
+    github_parser = subparsers.add_parser("github", help="GitHub Actions failure notifications.")
+    github_sub = github_parser.add_subparsers(dest="github_command", required=True)
+    github_sub.add_parser("status", help="Show authentication and the last GitHub poll.")
+    github_check = github_sub.add_parser("check", help="Poll now, ignoring the interval.")
+    github_check.add_argument("--dry-run", action="store_true", help="Preview without saving or flashing.")
+    github_sub.add_parser("test", help="Play the configured CI failure event once.")
+
     calendar_parser = subparsers.add_parser("calendar", help="Microsoft 365 / Outlook calendar.")
     calendar_sub = calendar_parser.add_subparsers(dest="calendar_command", required=True)
     calendar_sub.add_parser("login", help="Sign in to Microsoft 365 and cache the token.")
@@ -553,6 +561,17 @@ def main(
                 return 0
 
         config = _load_config(resolved_paths)
+
+        if args.command == "github":
+            if args.github_command == "status":
+                payload = github_status(config, resolved_paths)
+            elif args.github_command == "test":
+                payload = fire_notify(config, config["github"]["actions_failed_event"], controller_cls=controller_cls)
+            else:
+                payload = GitHubPoller(config, resolved_paths).poll(
+                    now=now_factory(), force=True, dry_run=args.dry_run, controller_cls=controller_cls)
+            _print_json(stream, payload)
+            return 1 if payload.get("result") == "error" else 0
 
         if args.command == "calendar":
             return _run_calendar_command(args, config, resolved_paths, stream, now_factory())

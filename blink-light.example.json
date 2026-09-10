@@ -65,12 +65,21 @@
   "device": {
     "serial": null
   },
+  "github": {
+    "actions_failed_event": "ci_failed",
+    "enabled": false,
+    "poll_seconds": 60,
+    "respect_quiet_hours": true
+  },
   "notify": {
     "agent_blocked": {
       "scene": "agent_blocked_scene"
     },
     "agent_done": {
       "scene": "agent_done_scene"
+    },
+    "ci_failed": {
+      "scene": "ci_failed_scene"
     }
   },
   "presets": {
@@ -238,6 +247,32 @@
         {
           "color": "#000000",
           "seconds": 0.45
+        }
+      ]
+    },
+    "ci_failed_scene": {
+      "loop": false,
+      "repeat": 2,
+      "steps": [
+        {
+          "color": "#803C00",
+          "seconds": 0.12
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.12
+        },
+        {
+          "color": "#803C00",
+          "seconds": 0.18
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.18
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.6
         }
       ]
     },
