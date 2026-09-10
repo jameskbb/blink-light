@@ -17,7 +17,7 @@ moment, waking at least once a minute to re-check its arithmetic.
 
 | Component | Lifetime | Wakes | What it does |
 |---|---|---|---|
-| **Scheduler loop** (`chime run`) | Always on, started at logon | Every ≤60s | Hourly chime + daily show |
+| **Scheduler loop** (`chime run`) | Always on, started at logon | Every ≤60s | Chime, show, alarms, and opt-in GitHub polling |
 | **Hourly task** (`chime now`) | ~1s, then exits | Once at `:00` | Hourly chime only. Backstop. |
 | **Watcher** (`watch start`) | Always on, opt-in | Every 5s | Calendar / rules / timers / presets |
 
@@ -45,7 +45,8 @@ wake
 ├── chime due?   date math + read chime-state.json   → pulse if due
 ├── show due?    date math + read show-state.json    → play scene if due
 ├── alarms due?  date math + read alarm-state.json   → flash each that is due
-└── sleep  min(next chime, next show, next alarm, 60s) + 0.5s
+├── GitHub due?  one conditional GET + github-state.json → notify new failures
+└── sleep  min(next chime, next show, next alarm, next GitHub poll, 60s) + 0.5s
          (in 2s slices, checking only for a stop request)
 ```
 
@@ -66,6 +67,29 @@ Three consequences worth internalising:
 
 The 60s cap exists so that a laptop resuming from sleep or a DST shift is noticed
 within a minute rather than at the end of a 55-minute sleep.
+
+### GitHub polling
+
+`GitHubPoller` lives for the scheduler lifetime. A disabled integration does no
+authentication, network I/O, or state I/O. Enabled polling uses at most one GET per
+due wake. The next deadline joins the sleep candidates.
+
+`gh auth token --hostname github.com` supplies the token through a hidden process
+with a 5-second timeout. The token remains in memory. After HTTP 401, the next poll
+refreshes it once. A second rejection requires a new login and loop restart.
+
+HTTP calls have a 5-second timeout. The interval is the larger of the config value
+and `X-Poll-Interval`, with a 60-second minimum. `Retry-After` can extend the wait.
+The fixed URL preserves conditional requests through `If-Modified-Since`.
+
+The first successful feed becomes a silent baseline. `github-state.json` stores
+the newest update timestamp and the 200 most recent notification/update keys.
+The integration saves that state atomically before device access. Quiet hours
+and missing devices cannot replay consumed events. The token never enters state.
+
+The CLI `github check` shares this state. Use `--dry-run` while the scheduler runs
+to avoid concurrent state writes. The feed covers the 50 newest notifications,
+so a burst of more than 50 updates can exceed its coverage.
 
 That slicing is not cosmetic. `stop_chime_loop` waits 8 seconds for the loop to
 retire itself before resorting to a kill, and on Windows that kill is
@@ -149,8 +173,16 @@ What actually costs something is *per-wake work*, and only some kinds:
 | A new condition on existing signals (idle, process running, file exists, time range, battery) | `rules` in `blink-light.json` | **Zero.** No code. |
 | Another scheduled moment (a 9am pulse, a Friday show) | An entry in `alarms` | **Zero.** No code — this is what `alarms` is for. |
 | Reacting to system state continuously | The watcher | Moderate — 5s ticks, and `psutil` enumerates processes each one. |
-| Anything network, COM, or subprocess (Outlook, an HTTP API, `git`) | The watcher, behind a cache | **This is the real cost.** Outlook COM is why the watcher caches its calendar poll to every 30s rather than every tick. |
+| Calendar network or COM access | The watcher, behind a cache | Outlook COM and Graph use the calendar poll interval. |
+| GitHub Actions failure notifications | The scheduler, behind a deadline | One GET per ≥60s. Measured: 1.512s for the first dry run, 0.897s for a cached-token HTTP 304 poll. No extra permanent process. |
 | Reacting to an event from another tool | A `notify` event plus that tool's own hook | **Zero standing cost.** Nothing polls; the other tool pays for the trigger. |
+
+GitHub measurement (2026-09-10): the first live dry run took **1.512s**, including
+the GitHub CLI token lookup and HTTP 200 response. It found eight baseline failures
+and performed no state writes or flashes. This is one sample, not a latency guarantee.
+The next scheduler poll returned HTTP 304 in **0.897s**, measured from its saved
+start timestamp to its log entry. It reused the token and wrote one small state
+file. Neither sample measures long-term CPU or memory use.
 
 ### The rule of thumb
 
@@ -182,6 +214,7 @@ tick. The watcher's own chain, highest first:
 | `blink_light/show.py` | Daily show — same slot/dedupe shape as the chime |
 | `blink_light/alarms.py` | Named daily alarms; reuses the show's slot arithmetic |
 | `blink_light/notify.py` | Named one-shot notifications; the integration entry point |
+| `blink_light/github.py` | Conditional GitHub polling, authentication, dedupe, and status |
 | `integrations/herdr/` | Herdr plugin manifest and event handler |
 | `blink_light/watcher.py` | The state loop and its precedence chain |
 | `blink_light/device.py` | blink(1) I/O, scene playback, on-device patterns |

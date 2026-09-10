@@ -20,6 +20,7 @@ Nothing here is required. Every time and colour below is a setting, and the
 | During a Busy or Tentative meeting | Red | Visible to anyone walking up |
 | An AI agent finishes | 2 slow blue breaths | Come back and review |
 | An AI agent is blocked | 3 quicker dim-red breaths | It needs an answer from me |
+| A GitHub Actions run I triggered fails | 2 pairs of dim orange-red heartbeat thumps | Review the failed run |
 | **17:00** | Rainbow swirl, then dark | End of the working day |
 | **17:00 – 07:00** | Off and silent | I'm out of office, so nothing flashes at an empty desk |
 

@@ -1,13 +1,43 @@
 # Runbook
 
 Operating blink-light on a Windows machine: setup, verification, troubleshooting,
-teardown. Every command here was run on the machine this repo was built on, and
-the outputs are real — only the device serial is swapped for a placeholder.
+teardown. Example output omits account identifiers. GitHub checks require a local
+GitHub CLI login and an enabled integration.
 
 Run everything from the repo root. `blink-light.bat` creates `.venv` and installs
 `requirements.txt` on first use, so there is no separate install step.
 
 ---
+
+## GitHub Actions checks
+
+1. Run `blink-light.bat github status` to check the login and last poll.
+2. Run `blink-light.bat github check --dry-run` to preview without a flash or state change.
+3. Run `blink-light.bat github test` to play the orange-red heartbeat once (2.40 seconds).
+4. After a config change, run `blink-light.bat autostart enable` to restart the scheduler.
+5. Read `%LOCALAPPDATA%\BlinkLight\blink-light.log` for `GitHub: poll 200`, `GitHub: poll 304`, or `GitHub: workflow run failed`.
+
+The integration is off by default. Add `"github": { "enabled": true }` to the local
+`blink-light.json`. Run `blink-light.bat config validate` before the restart.
+The first real poll records a silent baseline. During quiet hours, the poll
+consumes events without a flash. `github test` bypasses these gates.
+
+| Result | Cause | Action |
+| --- | --- | --- |
+| `reason: disabled` | Polling is off | Enable `github.enabled` in the local config. |
+| Missing CLI or login | `gh auth token` failed | Install GitHub CLI, then run `gh auth login --hostname github.com`. |
+| HTTP 401 | The token was rejected | Wait for the next poll. If rejection persists, log in again and restart the loop. |
+| HTTP 403 | Missing notification access or a rate limit | Run `gh auth status`. The feed needs `repo` or `notifications` scope. |
+| Network or server error | The service is unavailable | Wait for the next poll. Expected errors produce one INFO line per hour. |
+
+Unexpected faults retain tracebacks. A missing device produces the existing
+hourly device note. `github status` shows the last result, watermark, and last
+successful flash. The state file is `%LOCALAPPDATA%\BlinkLight\github-state.json`.
+
+For a live acceptance check, observe the next workflow failure you trigger.
+Outside quiet hours, it must produce one heartbeat and one failure log line.
+Normal latency is about 60 seconds. A larger server interval increases latency.
+Only the 50 most recently updated notifications enter each poll.
 
 ## 1. Setup from scratch
 

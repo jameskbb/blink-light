@@ -18,7 +18,7 @@ free of anything identifying (no serials, IDs, meeting names or paths).
 - Via launcher: `blink-light.bat <command>` — same thing, plus the bootstrap.
 - Top-level commands (see `blink_light/cli.py` for the authoritative list):
   `devices`, `status`, `light`, `preset`, `override`, `timer`, `watch`,
-  `chime`, `alarm`, `notify`, `show`, `autostart`, `calendar`, `config`,
+  `chime`, `alarm`, `notify`, `show`, `autostart`, `calendar`, `github`, `config`,
   `startup`. Most have subcommands (`status`, `test`, `run`, `now`, ...) —
   check `cli.py` before assuming one exists.
 
@@ -28,8 +28,7 @@ free of anything identifying (no serials, IDs, meeting names or paths).
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Verified: 246 tests, all passing, ~5s. No hardware required — device I/O is
-mocked in tests.
+Tests require no hardware or network. Device I/O and GitHub HTTP calls use mocks.
 
 ## Shipping
 
@@ -56,9 +55,9 @@ local git config), never a work email.
   `default_config()` — `tests/test_config.py` checks that, so regenerate it
   after changing a default. Every default lives in
   `blink_light/defaults.py` (`default_config()`), and `config.py` deep-merges
-  the user file over it. `alarms`, `notify`, and `rules` are replaced
-  wholesale by a user override, not merged by key — that's deliberate, so an
-  entry can be deleted by omitting it.
+  the user file over it. `alarms` and `rules` replace their defaults wholesale,
+  so omission removes an entry. `notify`, `presets`, and `scenes` merge by key.
+  New default events remain available with an existing user `notify` block.
 - Every scheduled effect (chime, show, alarm) must appear in the "What the
   light does" table in `README.md`, and `tests/test_readme_schedule.py` checks
   the table's times/colours/durations against the real config defaults. Adding
