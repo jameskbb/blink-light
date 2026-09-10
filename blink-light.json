@@ -343,7 +343,7 @@
       },
       "enabled": true,
       "end": "07:00",
-      "start": "22:30"
+      "start": "17:00"
     },
     "stop_turns_light_off": true,
     "tick_seconds": 5,
@@ -354,7 +354,7 @@
     "catch_up_window_seconds": 300,
     "enabled": true,
     "max_seconds": 10,
-    "respect_quiet_hours": true,
+    "respect_quiet_hours": false,
     "scene": "rainbow_swirl"
   }
 }

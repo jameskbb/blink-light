@@ -63,10 +63,16 @@ default) moves the light.
 
 ### Quiet hours
 
-**22:30 – 07:00** the light is off, and the chime, show and alarms all stay
-silent. Each can opt out with `respect_quiet_hours: false`.
+**17:00 – 07:00** the light is off, and the chime and alarms stay silent —
+the desk is empty from 5pm, so nothing flashes at it. Each effect can opt out
+with `respect_quiet_hours: false`.
 
-Because 08:13 and 08:15 sit outside that window, the standup alerts are
+The daily show is the one that does. It fires at exactly 17:00 and the window
+is inclusive of its start, so respecting quiet hours would retire the rainbow
+permanently; it opts out and still plays. That is also the last thing the
+light does before going dark for the night.
+
+Because 08:13 and 08:15 sit outside the window, the standup alerts are
 unaffected.
 
 ### Check what is live right now
@@ -137,7 +143,7 @@ smooth even when the machine is busy.
 | `scene` | `"rainbow_swirl"` | Any non-looping scene in `scenes`. |
 | `max_seconds` | `10` | Hard cap, enforced at `config validate` time — not by truncating playback. A longer scene fails validation with its measured duration. |
 | `catch_up_window_seconds` | `300` | How late a missed show may still play. |
-| `respect_quiet_hours` | `true` | Skip inside `settings.quiet_hours`. |
+| `respect_quiet_hours` | `false` | Off by default here: 17:00 is the first minute of quiet hours, so respecting them would mean the show never plays. |
 
 `show now --force` ignores quiet hours, the catch-up window and today's guard.
 

@@ -186,7 +186,7 @@ Work down this list:
 1. `blink-light.bat devices` — is the device enumerated at all?
 2. `blink-light.bat chime status` — is `enabled` true, and is `reason` something
    other than `due`?
-3. `reason: "quiet-hours"` — expected between 22:30 and 07:00. Set
+3. `reason: "quiet-hours"` — expected between 17:00 and 07:00. Set
    `chime.respect_quiet_hours` to `false` to chime overnight anyway.
 4. `reason: "already-fired"` — something already chimed this hour. Working as
    intended.

@@ -218,9 +218,11 @@ BUILTIN_SETTINGS = {
     "watchdog_millis": 8000,
     "stop_turns_light_off": True,
     "default_action": {"preset": "available"},
+    # Out of office from 17:00, so the light goes dark rather than chiming and
+    # showing calendar colours to an empty desk. The 17:00 show opts out above.
     "quiet_hours": {
         "enabled": True,
-        "start": "22:30",
+        "start": "17:00",
         "end": "07:00",
         "action": {"off": True},
     },
@@ -270,7 +272,10 @@ BUILTIN_SHOW = {
     "scene": "rainbow_swirl",
     "max_seconds": 10,
     "catch_up_window_seconds": 300,
-    "respect_quiet_hours": True,
+    # Quiet hours open at 17:00 and the window is inclusive of its start, so a
+    # show that respected them would never play again. It opts out instead:
+    # the rainbow is the end-of-day marker, not something to be silenced by it.
+    "respect_quiet_hours": False,
 }
 
 # Outlook's OlBusyStatus values, named so the config below reads as intent
