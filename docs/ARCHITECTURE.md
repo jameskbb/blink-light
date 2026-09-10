@@ -45,7 +45,9 @@ wake
 ├── chime due?   date math + read chime-state.json   → pulse if due
 ├── show due?    date math + read show-state.json    → play scene if due
 ├── alarms due?  date math + read alarm-state.json   → flash each that is due
-├── GitHub due?  one conditional GET + github-state.json → notify new failures
+├── GitHub due?  one conditional GET, plus a reviews read for each new update
+│                on your own pull request, inside a 5s budget          → notify
+│                new failures and pull-request activity
 └── sleep  min(next chime, next show, next alarm, next GitHub poll, 60s) + 0.5s
          (in 2s slices, checking only for a stop request)
 ```
@@ -91,11 +93,50 @@ The CLI `github check` shares this state. Use `--dry-run` while the scheduler ru
 to avoid concurrent state writes. The feed covers the 50 newest notifications,
 so a burst of more than 50 updates can exceed its coverage.
 
+**Pull-request detection** rides the same feed, at no extra request for most of
+it:
+
+- A review request or an @mention/team mention comes straight off the feed -
+  no extra call. GitHub documents that a notification thread's `reason` can
+  change on its latest update and may otherwise stick to a subscription, so
+  each thread's reason is remembered (`threads` in the state file) and an
+  unread thread that keeps its reason does not replay; it flashes again once
+  you've read it on GitHub or once the reason changes.
+- A review on a pull request you authored is not visible in the feed itself,
+  so it costs one `GET {pull request}/reviews` per new update on your own
+  pull request. The lower bound for a qualifying review is
+  `max(previous watermark - 120s, review_floor)` - the 120s covers the lag
+  between a review landing and GitHub bumping the thread - and the upper
+  bound is that thread's `updated_at`. Your own login (read once per
+  scheduler lifetime, like the token) and any `ignore_logins` are excluded.
+- Matched review ids are deduped (`seen_reviews`, 200 most recent) so a later
+  comment on the same thread does not re-flash an already-seen review. A full
+  100-review first page reads the Link header's `rel="last"` page number and
+  refetches from a URL built locally from that integer - never from the
+  header's own URL, so the bearer token only ever reaches a GitHub API
+  pull-request path.
+- `github-state.json` gains `pr_initialized`, `threads`, `seen_reviews`, and
+  `review_floor` alongside INT-01's fields.
+- Upgrading from an Actions-only state, or enabling pull requests for the
+  first time, sends one unconditional read (skipping `If-Modified-Since` once)
+  so thread memory is built from a real read rather than baselining on
+  nothing, then goes back to conditional requests.
+
 That slicing is not cosmetic. `stop_chime_loop` waits 8 seconds for the loop to
 retire itself before resorting to a kill, and on Windows that kill is
 `TerminateProcess` — no cleanup, no shutdown log. With a single 60-second sleep the
 graceful path almost never won. With slices it reliably does: measured stop time is
 **1.1s**, and the shutdown is logged.
+
+**The pull-request review budget** exists for the same reason. A poll can now
+make several extra requests - a login read, a reviews read per new update on
+your own pull request, sometimes a second page - and every flash already
+blocks for its scene length. All of that shares one 5-second deadline set at
+poll start; each extra request's timeout is capped at whatever is left of it,
+with a 0.5-second floor below which a request is skipped rather than sent.
+`stop_requested` is checked before every extra request and before every flash
+after the first, so a scheduler stop during a slow poll still lands inside
+`stop_chime_loop`'s 8-second grace instead of falling back to a kill.
 
 ## Logging
 
@@ -174,7 +215,7 @@ What actually costs something is *per-wake work*, and only some kinds:
 | Another scheduled moment (a 9am pulse, a Friday show) | An entry in `alarms` | **Zero.** No code — this is what `alarms` is for. |
 | Reacting to system state continuously | The watcher | Moderate — 5s ticks, and `psutil` enumerates processes each one. |
 | Calendar network or COM access | The watcher, behind a cache | Outlook COM and Graph use the calendar poll interval. |
-| GitHub Actions failure notifications | The scheduler, behind a deadline | One GET per ≥60s. Measured: 1.512s for the first dry run, 0.897s for a cached-token HTTP 304 poll. No extra permanent process. |
+| GitHub Actions failures and pull request activity | The scheduler, behind a 5s deadline | One conditional GET per ≥60s, plus one reviews GET per new update on your own pull request and one login GET per scheduler run, all inside the same budget. Measured: 1.512s for the first dry run, 0.897s for a cached-token HTTP 304 poll, 1.861s for the INT-02 dry run below. No extra permanent process. |
 | Reacting to an event from another tool | A `notify` event plus that tool's own hook | **Zero standing cost.** Nothing polls; the other tool pays for the trigger. |
 
 GitHub measurement (2026-09-10): the first live dry run took **1.512s**, including
@@ -183,6 +224,13 @@ and performed no state writes or flashes. This is one sample, not a latency guar
 The next scheduler poll returned HTTP 304 in **0.897s**, measured from its saved
 start timestamp to its log entry. It reused the token and wrote one small state
 file. Neither sample measures long-term CPU or memory use.
+
+INT-02 measurement (2026-09-10): a `github check --dry-run` on this same feed,
+after the pull-request code shipped but before the running loop's own state was
+upgraded, took **1.861s** and reported `pr_baseline: true` — expected, since that
+state predates pull-request tracking. Baselining a state does not read reviews,
+so this sample measures the feed cost, not the reviews cost; the reviews GET has
+not yet been measured against the owner's live account.
 
 ### The rule of thumb
 
@@ -214,7 +262,7 @@ tick. The watcher's own chain, highest first:
 | `blink_light/show.py` | Daily show — same slot/dedupe shape as the chime |
 | `blink_light/alarms.py` | Named daily alarms; reuses the show's slot arithmetic |
 | `blink_light/notify.py` | Named one-shot notifications; the integration entry point |
-| `blink_light/github.py` | Conditional GitHub polling, authentication, dedupe, and status |
+| `blink_light/github.py` | Conditional GitHub polling, authentication, dedupe, status, and pull-request review detection |
 | `integrations/herdr/` | Herdr plugin manifest and event handler |
 | `blink_light/watcher.py` | The state loop and its precedence chain |
 | `blink_light/device.py` | blink(1) I/O, scene playback, on-device patterns |

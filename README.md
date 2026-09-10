@@ -285,7 +285,8 @@ do not replay in the morning. An absent device also consumes the event.
 `github status` shows the login source, last poll, watermark, and last flash.
 `github check` polls immediately when enabled. `--dry-run` shows `matches` and
 `would_flash` without saving state or touching the light. `github test` plays the
-configured event once, even when polling is disabled.
+configured CI failure event by default, even when polling is disabled; `--event`
+picks another GitHub event to play instead.
 
 The feed contains the 50 most recently updated notifications. More than 50 updates
 between polls can hide a failure. GitHub must create a notification for the run.
@@ -294,6 +295,59 @@ never enters the config or state file.
 
 Conditional requests use `Last-Modified`. Unchanged feeds return HTTP 304 without
 consuming the API rate limit. See [GitHub notifications](https://docs.github.com/en/rest/activity/notifications).
+
+## GitHub Pull Requests
+
+Rides on the same poll as GitHub Actions Failures above — one integration,
+`github.enabled`, no second credential. All three pull-request toggles are on
+by default once GitHub polling is on.
+
+What flashes:
+
+- A review is requested from you.
+- You're @mentioned, or team-mentioned, on a pull request.
+- Someone else reviews a pull request you authored — bots included.
+
+What does not flash: plain comments and pushes on your own pull request, your
+own review replies, logins in `ignore_logins`, mentions on issues, and the
+`subscribed`, `state_change`, `assign`, and `comment` notification reasons.
+
+**The unread rule.** A pull request thread that keeps the same reason flashes
+once, then stays quiet on later activity — it flashes again only once you've
+read it on GitHub, or once its reason changes (a `subscribed` thread that
+becomes a `mention`, say).
+
+**Review detection** costs one extra read: `GET {pull request}/reviews` once
+per new update on a pull request you authored, to tell a real review apart
+from a plain comment. It also reads your GitHub login once per scheduler run,
+cached in memory like the token. Both share the same 5-second budget as the
+feed request; a check the budget or a stop request cuts short is logged and
+never flashes — the next update tries again.
+
+The first poll after enabling this, or after upgrading from an Actions-only
+setup, records existing pull-request activity as a silent baseline, the same
+way the first Actions poll does. Quiet hours consume pull-request activity
+the same way too.
+
+| Config key | Default | Meaning |
+| --- | --- | --- |
+| `github.pr.review_requested` | `true` | Flash `pr_review_requested` when a review is requested from you. |
+| `github.pr.mentioned` | `true` | Flash `pr_mentioned` on an @mention or team mention. |
+| `github.pr.review_received` | `true` | Flash `pr_review_received` when someone else reviews your pull request. |
+| `github.pr.ignore_logins` | `[]` | Logins whose reviews never flash, matched without regard to case. |
+
+Muting a noisy bot:
+
+```json
+{ "github": { "pr": { "ignore_logins": ["example-review-bot[bot]"] } } }
+```
+
+Preview it:
+
+```bat
+blink-light.bat notify run pr_review_requested
+blink-light.bat github test --event review_received
+```
 
 ## Start It At Boot
 
@@ -459,6 +513,7 @@ blink-light.bat github status
 blink-light.bat github check --dry-run
 blink-light.bat github check
 blink-light.bat github test
+blink-light.bat github test --event review_requested
 
 blink-light.bat config init
 blink-light.bat config validate
@@ -498,7 +553,7 @@ After editing, run `blink-light.bat config validate`, then
 `blink-light.bat autostart enable` so the running loop picks it up.
 
 Its top-level keys:
-`device`, `calendar`, `chime`, `show`, `alarms`, `notify`, `presets`,
+`device`, `calendar`, `github`, `chime`, `show`, `alarms`, `notify`, `presets`,
 `scenes`, `routines`, `rules`, `settings`.
 
 The watcher's precedence, highest first:

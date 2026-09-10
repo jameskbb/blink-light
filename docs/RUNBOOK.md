@@ -39,6 +39,35 @@ Outside quiet hours, it must produce one heartbeat and one failure log line.
 Normal latency is about 60 seconds. A larger server interval increases latency.
 Only the 50 most recently updated notifications enter each poll.
 
+## GitHub pull request checks
+
+Rides on the same poll and the same `github.enabled` switch as the Actions
+checks above; the three `github.pr` toggles are on by default once that is on.
+
+1. Run `blink-light.bat github status` and check `pull_requests_baselined`.
+2. Run `blink-light.bat github check --dry-run` and read `pr_baseline`,
+   `pr_matches`, `would_flash`, `review_checks_skipped`, and
+   `review_skip_reasons`.
+3. Run `blink-light.bat github test --event review_requested`,
+   `--event mentioned`, or `--event review_received` to play each scene once —
+   2.24, 2.56, and 1.98 seconds.
+4. After a config change, run `blink-light.bat autostart enable` to restart the
+   scheduler.
+5. Read `%LOCALAPPDATA%\BlinkLight\blink-light.log` for `GitHub: review
+   requested`, `GitHub: mentioned`, `GitHub: review received`, `pull request
+   review checks skipped`, and `GitHub: stop requested`.
+
+The first poll after enabling this, or after upgrading a running install that
+only had Actions failures on, records existing pull-request activity as a
+silent baseline — the same shape as the Actions baseline above.
+
+| Result | Cause | Action |
+| --- | --- | --- |
+| A review did not flash | It was your own reply, the login is in `ignore_logins`, it was submitted during quiet hours or before the baseline, the thread's reason was no longer `author`, or the check was skipped | Check `review_skip_reasons`, or wait for the next update |
+| Repeated activity did not flash | The thread is unread and kept its reason | Expected — read it on GitHub, or wait for the reason to change |
+| `review_skip_reasons` shows `time budget`, `stop requested`, `login unavailable`, `review read failed`, or `unexpected pull request URL` | The 5-second budget, a scheduler stop, or a failed request cut the check short | Wait for the next update, or check the network and `gh auth status` |
+| Mentions on issues do not flash | By design — only pull request mentions do | Not a bug |
+
 ## 1. Setup from scratch
 
 ### 1.1 Confirm the device is seen
