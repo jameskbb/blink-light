@@ -1,8 +1,9 @@
 """`.env` loading and the map from environment variables into config.
 
 Credentials and account-specific ids live here rather than in
-`blink-light.json`, because that file is committed and shared. Nothing in this
-module ever writes a value back to disk.
+`blink-light.json`, because that file holds behaviour - colours, schedules -
+and gets copied and shared as a template. Nothing in this module ever writes a
+value back to disk.
 """
 
 from __future__ import annotations

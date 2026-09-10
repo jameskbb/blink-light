@@ -17,7 +17,7 @@ blink-light.bat config init
 blink-light.bat status
 ```
 
-`devices` confirms the light is seen. `light color` proves it works. `config init` writes `blink-light.json`, auto-filling `device.serial` when exactly one device is connected. `status` shows what the watcher would do right now.
+`devices` confirms the light is seen. `light color` proves it works. `config init` writes `blink-light.json`, auto-filling `device.serial` when exactly one device is connected. That file is yours: it is gitignored, so your serial and schedule stay on your machine. Without one, the built-in defaults apply. [`blink-light.example.json`](blink-light.example.json) shows every key at its default. `status` shows what the watcher would do right now.
 
 Running `blink-light.bat` with no arguments prints a welcome — or, if `calendar.enabled` and `calendar.auto_watch_on_launch` are both `true`, starts the background watcher immediately.
 
@@ -25,8 +25,10 @@ For full first-time setup — installing the scheduled tasks, verifying the chim
 
 ## What the light does
 
-Everything currently configured, in one place. Values are from
-[`blink-light.json`](blink-light.json).
+Everything the defaults do, in one place. Values are the built-in defaults from
+[`blink_light/defaults.py`](blink_light/defaults.py), mirrored in
+[`blink-light.example.json`](blink-light.example.json); your own
+`blink-light.json` can override any of them.
 
 ### On a schedule
 
@@ -272,7 +274,7 @@ One-time, about five minutes:
 
 1. Open [Entra app registrations](https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) → **New registration**. Name it `blink-light`, and under **Supported account types** pick *Accounts in this organizational directory only*.
 2. Under **Redirect URI**, choose **Public client/native** and enter `http://localhost`.
-3. Register, then copy the **Application (client) ID** and **Directory (tenant) ID** into `.env` (see Secrets below) — not into `blink-light.json`, which is committed.
+3. Register, then copy the **Application (client) ID** and **Directory (tenant) ID** into `.env` (see Secrets below) — not into `blink-light.json`, which holds behaviour and gets shared as a template.
 4. **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated** → `Calendars.Read` → Add. If your tenant requires it, click **Grant admin consent** (or ask an admin to).
 5. Fill in `.env`, set `"provider": "graph"` in `blink-light.json`, then run:
 
@@ -395,7 +397,14 @@ blink-light.bat startup status
 
 ## Config
 
-The repo-local config file is `blink-light.json`. Its top-level keys:
+Your config file is `blink-light.json` in the repo root. It is machine-local:
+`.gitignore` excludes it and the secret scan refuses to let it be committed, so
+a device serial or a personal schedule cannot end up in a push. Start from
+[`blink-light.example.json`](blink-light.example.json) — exactly what
+`config init` writes with no device attached — or leave the file out and run on
+the built-in defaults.
+
+Its top-level keys:
 `device`, `calendar`, `chime`, `show`, `alarms`, `notify`, `presets`,
 `scenes`, `routines`, `rules`, `settings`.
 
@@ -425,7 +434,8 @@ watcher repaints the underlying state on its next tick.
 | `blink-light-chime.vbs` | Hides the console window for the hourly task. |
 | `blink-light-autostart.bat` | Long-running runner started at logon; calls `chime run`. |
 | `blink-light-autostart.vbs` | Hides the console and waits on the loop (single-instance guard). |
-| `blink-light.json` | Config. |
+| `blink-light.example.json` | Config template: every key at its default. Committed. |
+| `blink-light.json` | Your config. Gitignored; created by `config init` or copied from the template. |
 | `blink_light/chime.py` | Hourly chime: slots, dedupe, scheduler loop, scheduled-task management. |
 | `blink_light/show.py` | Daily light show, same slot/dedupe shape as the chime. |
 | `blink_light/alarms.py` | Named daily alarms; shares slot logic with the show. |

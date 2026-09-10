@@ -2,7 +2,7 @@
 
 Operating blink-light on a Windows machine: setup, verification, troubleshooting,
 teardown. Every command here was run on the machine this repo was built on, and
-the outputs are real.
+the outputs are real — only the device serial is swapped for a placeholder.
 
 Run everything from the repo root. `blink-light.bat` creates `.venv` and installs
 `requirements.txt` on first use, so there is no separate install step.

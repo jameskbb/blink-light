@@ -4,8 +4,10 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Anything account- or machine-specific. The committed blink-light.json stays
-# shareable; personal values (tenant id, client id) go in the .local sibling.
+# Anything account- or machine-specific. blink-light.json is this machine's own
+# config (device serial, calendar provider, schedule); blink-light.example.json
+# is the committed template. The secret scan also refuses to track these.
+blink-light.json
 blink-light.local.json
 *.local.json
 

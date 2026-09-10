@@ -26,7 +26,7 @@ full feature/command reference and `docs/ARCHITECTURE.md` /
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-Verified: 241 tests, all passing, ~5s. No hardware required — device I/O is
+Verified: 246 tests, all passing, ~5s. No hardware required — device I/O is
 mocked in tests.
 
 ## Shipping
@@ -34,6 +34,11 @@ mocked in tests.
 Commit straight to `main` and push. This is a single-maintainer repo; a PR
 here only parks finished work behind a gate nobody reads. The test suite is
 the gate — run it before pushing.
+
+The repo is kept ready to be public. In commit messages keep
+`Co-Authored-By`, but leave out `Claude-Session:` lines — they link to private
+sessions. Author commits with the GitHub no-reply address (set in this repo's
+local git config), never a work email.
 
 ## Conventions
 
@@ -43,7 +48,11 @@ the gate — run it before pushing.
 - Test names are full sentences describing behaviour, not
   `test_<method>_<case>` shorthand — e.g. `test_a_bom_does_not_swallow_the_first_key`,
   `test_the_hook_is_wired_to_the_shared_scan`. Match that style for new tests.
-- Config lives in `blink-light.json`; every default lives in
+- Config lives in `blink-light.json`, which is machine-local and gitignored
+  (`config init` writes it; the secret scan refuses to let it be tracked).
+  `blink-light.example.json` is the committed template and must stay equal to
+  `default_config()` — `tests/test_config.py` checks that, so regenerate it
+  after changing a default. Every default lives in
   `blink_light/defaults.py` (`default_config()`), and `config.py` deep-merges
   the user file over it. `alarms`, `notify`, and `rules` are replaced
   wholesale by a user override, not merged by key — that's deliberate, so an
@@ -55,9 +64,9 @@ the gate — run it before pushing.
 
 ## Secrets
 
-- Credentials go in `.env` (gitignored), never in `blink-light.json` (committed).
-  `.env.template` documents the recognised variable names and is the one
-  `.env.*` file that's tracked.
+- Credentials go in `.env` (gitignored), never in `blink-light.json` or its
+  committed template. `.env.template` documents the recognised variable names
+  and is the one `.env.*` file that's tracked.
 - Both `.githooks/pre-commit` and `tests/test_secrets_guardrail.py` run the
   same scan, defined once in `blink_light/secret_scan.py`. Install the hook
   with `git config core.hooksPath .githooks`. Run the scan by hand with

@@ -43,7 +43,8 @@ def build_effective_config(path: Path) -> dict[str, Any]:
     user = load_user_config(path)
     merged = merge_config(user)
     # Applied last, and never written back: credentials and account ids belong
-    # in the gitignored .env, not in the committed blink-light.json.
+    # in .env, not in blink-light.json - that file holds behaviour and gets
+    # shared as a template.
     merged = apply_env_overrides(merged, resolve_env(path.parent / ENV_FILE_NAME))
     validate_config(merged)
     return merged

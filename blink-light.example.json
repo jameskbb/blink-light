@@ -43,7 +43,7 @@
     "ignore_all_day": true,
     "lookahead_minutes": 15,
     "poll_seconds": 30,
-    "provider": "graph",
+    "provider": "outlook",
     "ten_minute_warning": {
       "color": "#FDD835",
       "count": 2,
@@ -63,7 +63,7 @@
     "secondary_color": "#000000"
   },
   "device": {
-    "serial": "12ab34cd"
+    "serial": null
   },
   "notify": {
     "agent_blocked": {
@@ -272,6 +272,157 @@
         {
           "color": "#000000",
           "seconds": 1.4
+        }
+      ]
+    },
+    "rainbow_swirl": {
+      "loop": false,
+      "repeat": 1,
+      "steps": [
+        {
+          "color": "#730000",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#006683",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#934100",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#0036A3",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#B29E00",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#1500C0",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#89CD00",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#7800D9",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#32E300",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#EC00EC",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#00F436",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#F9008A",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#00FDA9",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#FF001C",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#00E2FF",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#FD5400",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#006FF9",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#F4BD00",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#0000EC",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#B1E300",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#6000D9",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#44CD00",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#AB00C0",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#00B214",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#A3006C",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#009352",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#83001D",
+          "led": 1,
+          "seconds": 0.34
+        },
+        {
+          "color": "#007373",
+          "led": 2,
+          "seconds": 0.34
+        },
+        {
+          "color": "#000000",
+          "led": 0,
+          "seconds": 0.4
         }
       ]
     },

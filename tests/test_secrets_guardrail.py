@@ -48,12 +48,21 @@ class SecretRuleTests(unittest.TestCase):
                 self.assertEqual(find_secrets(sample), [], f"false positive: {sample}")
 
     def test_forbidden_paths(self) -> None:
-        for path in (".env", ".env.local", "graph-token-cache.json", "id.pem", "blink-light.local.json"):
+        for path in (
+            ".env",
+            ".env.local",
+            "graph-token-cache.json",
+            "id.pem",
+            "blink-light.local.json",
+            "blink-light.json",
+        ):
             with self.subTest(path=path):
                 self.assertTrue(path_is_forbidden(path))
 
-    def test_the_template_is_allowed(self) -> None:
-        self.assertFalse(path_is_forbidden(".env.template"))
+    def test_the_templates_are_allowed(self) -> None:
+        for path in (".env.template", "blink-light.example.json"):
+            with self.subTest(path=path):
+                self.assertFalse(path_is_forbidden(path))
 
 
 class RepoIsCleanTests(unittest.TestCase):
@@ -65,9 +74,9 @@ class RepoIsCleanTests(unittest.TestCase):
         """The check that would have caught a client id pasted into the config."""
         self.assertEqual(scan_tracked(ROOT), [])
 
-    def test_git_actually_ignores_env_files_and_token_caches(self) -> None:
+    def test_git_actually_ignores_local_config_env_files_and_token_caches(self) -> None:
         """Asserting on git's behaviour, not on the text of .gitignore."""
-        for candidate in (".env", "graph-token-cache.json", "blink-light.local.json"):
+        for candidate in (".env", "graph-token-cache.json", "blink-light.local.json", "blink-light.json"):
             result = subprocess.run(
                 ["git", "check-ignore", "-q", candidate],
                 cwd=ROOT,

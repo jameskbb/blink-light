@@ -24,8 +24,10 @@ SECRET_ASSIGNMENT = re.compile(
     re.IGNORECASE,
 )
 
-# Files that must never be tracked, whatever they contain.
-FORBIDDEN_NAMES = {".env", ".envrc"}
+# Files that must never be tracked, whatever they contain. blink-light.json is
+# the machine's own config - device serial, calendar provider, a personal
+# schedule - so it stays local; blink-light.example.json is the shared copy.
+FORBIDDEN_NAMES = {".env", ".envrc", "blink-light.json"}
 FORBIDDEN_SUFFIXES = (".token", ".pem", ".pfx", ".local.json")
 FORBIDDEN_FRAGMENTS = ("token-cache",)
 
