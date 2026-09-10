@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 from typing import Any
 
-from .defaults import default_config
+from .defaults import PR_EVENTS, default_config
 from .env_file import ENV_FILE_NAME, apply_env_overrides, resolve_env
 from .state import read_json
 
@@ -332,7 +332,7 @@ def _validate_action_references(payload: dict[str, Any]) -> None:
 def _validate_github(github: Any, events: dict[str, Any]) -> None:
     if not isinstance(github, dict):
         raise ConfigError("'github' must be an object.")
-    allowed = {"enabled", "poll_seconds", "respect_quiet_hours", "actions_failed_event"}
+    allowed = {"enabled", "poll_seconds", "respect_quiet_hours", "actions_failed_event", "pr"}
     if set(github) - allowed:
         raise ConfigError("Unknown github setting. Credentials belong in the gh login, not config.")
     for key in ("enabled", "respect_quiet_hours"):
@@ -349,6 +349,27 @@ def _validate_github(github: Any, events: dict[str, Any]) -> None:
     event = github.get("actions_failed_event")
     if not isinstance(event, str) or event not in events:
         raise ConfigError("'github.actions_failed_event' must name an event in notify.")
+    _validate_github_pr(github.get("pr"), events)
+
+
+def _validate_github_pr(pr: Any, events: dict[str, Any]) -> None:
+    if not isinstance(pr, dict):
+        raise ConfigError("'github.pr' must be an object.")
+    allowed = {"review_requested", "mentioned", "review_received", "ignore_logins"}
+    if set(pr) - allowed:
+        raise ConfigError("Unknown github.pr setting.")
+    for key in ("review_requested", "mentioned", "review_received"):
+        if not isinstance(pr.get(key), bool):
+            raise ConfigError(f"'github.pr.{key}' must be a boolean.")
+    logins = pr.get("ignore_logins")
+    if not isinstance(logins, list) or not all(
+        isinstance(login, str) and 1 <= len(login) <= 100 and not any(character.isspace() for character in login)
+        for login in logins
+    ):
+        raise ConfigError("'github.pr.ignore_logins' must be a list of GitHub logins.")
+    for name in PR_EVENTS.values():
+        if name not in events:
+            raise ConfigError(f"'{name}' must exist in notify.")
 
 
 def _validate_chime(chime: Any) -> None:

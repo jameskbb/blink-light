@@ -69,6 +69,12 @@
     "actions_failed_event": "ci_failed",
     "enabled": false,
     "poll_seconds": 60,
+    "pr": {
+      "ignore_logins": [],
+      "mentioned": true,
+      "review_received": true,
+      "review_requested": true
+    },
     "respect_quiet_hours": true
   },
   "notify": {
@@ -80,6 +86,15 @@
     },
     "ci_failed": {
       "scene": "ci_failed_scene"
+    },
+    "pr_mentioned": {
+      "scene": "pr_mentioned_scene"
+    },
+    "pr_review_received": {
+      "scene": "pr_review_received_scene"
+    },
+    "pr_review_requested": {
+      "scene": "pr_review_requested_scene"
     }
   },
   "presets": {
@@ -307,6 +322,93 @@
         {
           "color": "#000000",
           "seconds": 1.4
+        }
+      ]
+    },
+    "pr_mentioned_scene": {
+      "loop": false,
+      "repeat": 2,
+      "steps": [
+        {
+          "color": "#442C72",
+          "seconds": 0.5
+        },
+        {
+          "color": "#1B112E",
+          "seconds": 0.07
+        },
+        {
+          "color": "#442C72",
+          "seconds": 0.07
+        },
+        {
+          "color": "#1B112E",
+          "seconds": 0.07
+        },
+        {
+          "color": "#442C72",
+          "seconds": 0.07
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.5
+        }
+      ]
+    },
+    "pr_review_received_scene": {
+      "loop": false,
+      "repeat": 2,
+      "steps": [
+        {
+          "color": "#1B112E",
+          "seconds": 0.15
+        },
+        {
+          "color": "#1B112E",
+          "seconds": 0.12
+        },
+        {
+          "color": "#442C72",
+          "seconds": 0.15
+        },
+        {
+          "color": "#442C72",
+          "seconds": 0.12
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.45
+        }
+      ]
+    },
+    "pr_review_requested_scene": {
+      "loop": false,
+      "repeat": 2,
+      "steps": [
+        {
+          "color": "#442C72",
+          "led": 1,
+          "seconds": 0.18
+        },
+        {
+          "color": "#1B112E",
+          "led": 1,
+          "seconds": 0.18
+        },
+        {
+          "color": "#442C72",
+          "led": 2,
+          "seconds": 0.18
+        },
+        {
+          "color": "#1B112E",
+          "led": 2,
+          "seconds": 0.18
+        },
+        {
+          "color": "#000000",
+          "led": 0,
+          "seconds": 0.4
         }
       ]
     },

@@ -428,7 +428,14 @@ def run_chime_loop(
                 log_effect_failure("Alarm", error, current)
 
             try:
-                github.poll(now=current, controller_cls=controller_cls)
+                # Flashes block for their scene length and review reads add
+                # network time, so the poll must notice a stop request to
+                # keep inside stop_chime_loop's 8-second grace.
+                github.poll(
+                    now=current,
+                    controller_cls=controller_cls,
+                    stop_requested=lambda: paths.chime_stop_path.exists() or bool(stop_check and stop_check()),
+                )
             except Exception as error:
                 log_effect_failure("GitHub", error, current)
 

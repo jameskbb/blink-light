@@ -73,6 +73,9 @@ Everything a fresh install does, in one place. Values are the built-in defaults 
 | AI agent finishes ([Herdr](docs/HERDR.md)) | 2 slow breaths | 🔵 `#28627C` — Herdr blue at 50% | 1.80s | `notify run agent_done` |
 | AI agent blocked | 3 quicker breaths | 🔴 `#801E00` — dim red | 1.26s | `notify run agent_blocked` |
 | GitHub Actions run you triggered fails (opt-in) | 2 pairs of heartbeat thumps | 🟠 `#803C00` — dim orange-red | 2.40s | `notify run ci_failed` |
+| A pull request review is requested from you (opt-in) | A pulse handed from the top LED to the bottom, twice | 🟣 `#442C72` — dim violet | 2.24s | `notify run pr_review_requested` |
+| You're @mentioned on a pull request (opt-in) | A slow swell with a flicker at its peak, twice | 🟣 `#442C72` — dim violet | 2.56s | `notify run pr_mentioned` |
+| Someone reviews your pull request (opt-in) | A two-step climb, twice | 🟣 `#1B112E` — dimmer violet | 1.98s | `notify run pr_review_received` |
 
 ### The resting colour (watcher only, opt-in)
 

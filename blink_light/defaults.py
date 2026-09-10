@@ -41,6 +41,14 @@ AGENT_DONE_COLOR = scale_brightness(HERDR_BLUE, NOTIFY_BRIGHTNESS)
 AGENT_BLOCKED_COLOR = scale_brightness("#FF3D00", NOTIFY_BRIGHTNESS)
 CI_FAILED_COLOR = scale_brightness("#FF7800", NOTIFY_BRIGHTNESS)
 
+# Violet is the one hue no notification, painted preset or calendar colour
+# uses. The three pull-request events share it so they read as one family,
+# told apart from each other by rhythm rather than hue - the way the two
+# standup alerts share gold.
+PR_VIOLET = "#8957E5"
+PR_COLOR = scale_brightness(PR_VIOLET, NOTIFY_BRIGHTNESS)
+PR_DIM_COLOR = scale_brightness(PR_VIOLET, NOTIFY_BRIGHTNESS * 0.4)
+
 # Standup alerts. Full brightness, unlike the notification colours above: these
 # are meant to catch your eye across the room, not sit quietly in the corner.
 STANDUP_COLOR = "#FFD700"
@@ -125,6 +133,43 @@ BUILTIN_SCENES = {
         "steps": [
             {"color": AGENT_BLOCKED_COLOR, "seconds": 0.22},
             {"color": "#000000", "seconds": 0.20},
+        ],
+    },
+    # The three pull-request scenes differ from the agent and CI scenes, and
+    # from each other, by rhythm as well as hue: a relay across both LEDs, a
+    # swell with a flicker, and a two-step climb.
+    "pr_review_requested_scene": {
+        "loop": False,
+        "repeat": 2,
+        "steps": [
+            {"color": PR_COLOR, "seconds": 0.18, "led": 1},
+            {"color": PR_DIM_COLOR, "seconds": 0.18, "led": 1},
+            {"color": PR_COLOR, "seconds": 0.18, "led": 2},
+            {"color": PR_DIM_COLOR, "seconds": 0.18, "led": 2},
+            {"color": "#000000", "seconds": 0.40, "led": 0},
+        ],
+    },
+    "pr_mentioned_scene": {
+        "loop": False,
+        "repeat": 2,
+        "steps": [
+            {"color": PR_COLOR, "seconds": 0.50},
+            {"color": PR_DIM_COLOR, "seconds": 0.07},
+            {"color": PR_COLOR, "seconds": 0.07},
+            {"color": PR_DIM_COLOR, "seconds": 0.07},
+            {"color": PR_COLOR, "seconds": 0.07},
+            {"color": "#000000", "seconds": 0.50},
+        ],
+    },
+    "pr_review_received_scene": {
+        "loop": False,
+        "repeat": 2,
+        "steps": [
+            {"color": PR_DIM_COLOR, "seconds": 0.15},
+            {"color": PR_DIM_COLOR, "seconds": 0.12},
+            {"color": PR_COLOR, "seconds": 0.15},
+            {"color": PR_COLOR, "seconds": 0.12},
+            {"color": "#000000", "seconds": 0.45},
         ],
     },
     # Standup alerts. The two are told apart by urgency - a short warning, then
@@ -253,10 +298,20 @@ BUILTIN_CHIME = {
     "respect_quiet_hours": True,
 }
 
+# The event names are fixed; `notify` decides how each one looks.
+PR_EVENTS = {
+    "review_requested": "pr_review_requested",
+    "mentioned": "pr_mentioned",
+    "review_received": "pr_review_received",
+}
+
 BUILTIN_NOTIFY = {
     "ci_failed": {"scene": "ci_failed_scene"},
     "agent_done": {"scene": "agent_done_scene"},
     "agent_blocked": {"scene": "agent_blocked_scene"},
+    "pr_review_requested": {"scene": "pr_review_requested_scene"},
+    "pr_mentioned": {"scene": "pr_mentioned_scene"},
+    "pr_review_received": {"scene": "pr_review_received_scene"},
 }
 
 BUILTIN_GITHUB = {
@@ -264,6 +319,12 @@ BUILTIN_GITHUB = {
     "poll_seconds": 60,
     "respect_quiet_hours": True,
     "actions_failed_event": "ci_failed",
+    "pr": {
+        "review_requested": True,
+        "mentioned": True,
+        "review_received": True,
+        "ignore_logins": [],
+    },
 }
 
 BUILTIN_ALARMS = [

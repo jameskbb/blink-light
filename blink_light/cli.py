@@ -32,7 +32,7 @@ from .chime import (
     uninstall_scheduled_task,
 )
 from .alarms import alarm_status, fire_alarm, fire_due_alarms, find_alarm
-from .defaults import BUSY_STATUS_NAMES, default_config
+from .defaults import BUSY_STATUS_NAMES, PR_EVENTS, default_config
 from .notify import NotifyError, fire_notify, list_events, resolve_event
 from .github import GitHubPoller, github_status
 from .show import fire_show, maybe_fire_show, show_status
@@ -477,12 +477,18 @@ def _build_parser() -> argparse.ArgumentParser:
     autostart_sub.add_parser("disable", help="Stop the runner and remove the logon task.")
     autostart_sub.add_parser("status", help="Show whether the logon task is registered and running.")
 
-    github_parser = subparsers.add_parser("github", help="GitHub Actions failure notifications.")
+    github_parser = subparsers.add_parser("github", help="GitHub Actions failures and pull request activity.")
     github_sub = github_parser.add_subparsers(dest="github_command", required=True)
     github_sub.add_parser("status", help="Show authentication and the last GitHub poll.")
     github_check = github_sub.add_parser("check", help="Poll now, ignoring the interval.")
     github_check.add_argument("--dry-run", action="store_true", help="Preview without saving or flashing.")
-    github_sub.add_parser("test", help="Play the configured CI failure event once.")
+    github_test = github_sub.add_parser("test", help="Play a GitHub event once.")
+    github_test.add_argument(
+        "--event",
+        choices=["actions_failed", "review_requested", "mentioned", "review_received"],
+        default="actions_failed",
+        help="Which GitHub event to play once.",
+    )
 
     calendar_parser = subparsers.add_parser("calendar", help="Microsoft 365 / Outlook calendar.")
     calendar_sub = calendar_parser.add_subparsers(dest="calendar_command", required=True)
@@ -566,7 +572,12 @@ def main(
             if args.github_command == "status":
                 payload = github_status(config, resolved_paths)
             elif args.github_command == "test":
-                payload = fire_notify(config, config["github"]["actions_failed_event"], controller_cls=controller_cls)
+                event_name = (
+                    config["github"]["actions_failed_event"]
+                    if args.event == "actions_failed"
+                    else PR_EVENTS[args.event]
+                )
+                payload = fire_notify(config, event_name, controller_cls=controller_cls)
             else:
                 payload = GitHubPoller(config, resolved_paths).poll(
                     now=now_factory(), force=True, dry_run=args.dry_run, controller_cls=controller_cls)
