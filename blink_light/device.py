@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
 import json
@@ -36,6 +37,14 @@ class BlinkDeviceController:
             raise DeviceError("The 'blink1' package is not installed.") from exc
         return Blink1
 
+    @staticmethod
+    def _connection_errors() -> tuple[type[BaseException], ...]:
+        try:
+            from blink1.blink1 import Blink1ConnectionFailed
+        except ImportError:  # pragma: no cover - exercised only on missing dependency
+            return (OSError,)
+        return (Blink1ConnectionFailed, OSError)
+
     @classmethod
     def list_devices(cls) -> list[str]:
         blink1_cls = cls._blink1_class()
@@ -63,20 +72,52 @@ class BlinkDeviceController:
                 self.serial = serial
             return self._device
 
+    @contextmanager
+    def _connected(self):
+        """Yield the open device, reporting a light that has gone as DeviceError.
+
+        The watcher holds one controller for hours. Unplugging the light leaves
+        its handle stale: every call raises the library's Blink1ConnectionFailed
+        or hidapi's OSError, which no caller treats as a missing device, and the
+        dead handle was kept, so plugging the light back in never reconnected.
+        Drop the handle instead, so the next call looks for the light afresh.
+        """
+        with self._lock:
+            try:
+                yield self._ensure_device()
+            except self._connection_errors() as exc:
+                self._forget_device()
+                raise DeviceError(f"blink(1) stopped responding: {exc}") from exc
+
+    def _forget_device(self) -> None:
+        device, self._device = self._device, None
+        self._current_signature = None
+        if device is not None:
+            try:
+                device.close()
+            except Exception:
+                # Closing the handle of a light that is already gone can fail
+                # too, and there is nothing left to release either way.
+                pass
+
     def status(self) -> DeviceStatus:
         serials = self.list_devices()
         selected = None
         version = None
         try:
-            device = self._ensure_device()
-            selected = self.serial
-            version = device.get_version()
+            with self._connected() as device:
+                selected = self.serial
+                version = device.get_version()
         except DeviceError:
             selected = self.serial if self.serial in serials else None
         return DeviceStatus(selected_serial=selected, available_serials=serials, version=version)
 
     def close(self) -> None:
-        self.stop_scene()
+        try:
+            self.stop_scene()
+        except DeviceError:
+            # The light has gone, and stop_scene already dropped its handle.
+            pass
         with self._lock:
             if self._device is not None:
                 try:
@@ -85,14 +126,14 @@ class BlinkDeviceController:
                     self._device = None
 
     def enable_watchdog(self, timeout_millis: int) -> None:
-        with self._lock:
-            device = self._ensure_device()
+        with self._connected() as device:
             device.server_tickle(True, int(timeout_millis), stay_lit=False)
 
     def disable_watchdog(self) -> None:
         with self._lock:
             if self._device is not None:
-                self._device.server_tickle(False, 0, stay_lit=False)
+                with self._connected() as device:
+                    device.server_tickle(False, 0, stay_lit=False)
 
     def stop_scene(self) -> None:
         thread = self._scene_thread
@@ -103,18 +144,19 @@ class BlinkDeviceController:
         self._scene_stop = threading.Event()
         with self._lock:
             if self._device is not None:
-                self._device.stop()
+                with self._connected() as device:
+                    device.stop()
 
     def off(self) -> None:
         self.stop_scene()
-        with self._lock:
-            self._ensure_device().off()
+        with self._connected() as device:
+            device.off()
         self._current_signature = json.dumps({"off": True}, sort_keys=True)
 
     def solid(self, color: str, fade_ms: int = 0, led: int = 0) -> None:
         self.stop_scene()
-        with self._lock:
-            self._ensure_device().fade_to_color(int(fade_ms), color, ledn=led)
+        with self._connected() as device:
+            device.fade_to_color(int(fade_ms), color, ledn=led)
         self._current_signature = json.dumps({"color": color, "fade_ms": fade_ms, "led": led}, sort_keys=True)
 
     def flash(
@@ -161,8 +203,7 @@ class BlinkDeviceController:
         return not scene.get("loop", False) and len(scene.get("steps", [])) <= 32
 
     def _load_scene_to_device(self, scene: dict[str, Any]) -> float:
-        with self._lock:
-            device = self._ensure_device()
+        with self._connected() as device:
             steps = scene["steps"]
             total_seconds = 0.0
             for index, step in enumerate(steps):
@@ -181,15 +222,15 @@ class BlinkDeviceController:
         loop = bool(scene.get("loop", False))
         repeat = int(scene.get("repeat", 1))
         iteration = 0
-        with self._lock:
-            self._ensure_device().stop()
+        with self._connected() as device:
+            device.stop()
         while not stop_event.is_set() and (loop or iteration < repeat):
             for step in scene["steps"]:
                 if stop_event.is_set():
                     return
                 duration_seconds = float(step["seconds"])
-                with self._lock:
-                    self._ensure_device().fade_to_color(
+                with self._connected() as device:
+                    device.fade_to_color(
                         int(duration_seconds * 1000),
                         step["color"],
                         ledn=int(step.get("led", 0)),

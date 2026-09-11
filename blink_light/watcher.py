@@ -11,7 +11,7 @@ import time
 from typing import Any, Callable
 
 from .chime import maybe_fire_chime
-from .device import BlinkDeviceController
+from .device import BlinkDeviceController, DeviceError
 from .calendar_source import (
     CalendarCache,
     acknowledge_calendar_result,
@@ -243,6 +243,7 @@ def run_watch_loop(
     # a request id and date, so the message differs every poll; log the outage
     # starting and ending, not each message.
     calendar_down_since: datetime | None = None
+    light_missing_since: datetime | None = None
     try:
         while True:
             if paths.watcher_stop_path.exists():
@@ -282,20 +283,36 @@ def run_watch_loop(
                 LOGGER.info("Calendar available again after %s min", minutes)
                 calendar_down_since = None
             signature = json.dumps(result["action"], sort_keys=True)
-            if signature != last_signature:
-                controller.apply_action(result["action"], config["scenes"], persistent=True)
-                acknowledge_calendar_result(paths, result, now=current)
-                last_signature = signature
-                # Only on a change: at a 5-second tick, a line per tick was
-                # ~17,000 identical lines a day burying the scheduler's own.
-                LOGGER.info("Applied action from %s:%s -> %s", result["source"], result["detail"], result["action"])
-            chime_result = maybe_fire_chime(config, paths, controller=controller, now=current)
-            if chime_result["fired"]:
-                # The chime leaves the LED wherever the pulse ended, so drop the
-                # cached signature and let the next tick repaint the real state.
+            chime_result = {"fired": False, "reason": "light-not-connected"}
+            try:
+                if signature != last_signature:
+                    controller.apply_action(result["action"], config["scenes"], persistent=True)
+                    acknowledge_calendar_result(paths, result, now=current)
+                    last_signature = signature
+                    # Only on a change: at a 5-second tick, a line per tick was
+                    # ~17,000 identical lines a day burying the scheduler's own.
+                    LOGGER.info("Applied action from %s:%s -> %s", result["source"], result["detail"], result["action"])
+                chime_result = maybe_fire_chime(config, paths, controller=controller, now=current)
+                if chime_result["fired"]:
+                    # The chime leaves the LED wherever the pulse ended, so drop the
+                    # cached signature and let the next tick repaint the real state.
+                    last_signature = None
+                    LOGGER.info("Fired hourly chime for slot %s", chime_result["slot"])
+                controller.enable_watchdog(int(config["settings"]["watchdog_millis"]))
+            except DeviceError as error:
+                # Undocking takes the light with it. That used to end the
+                # watcher, so re-docking left the light dark until someone
+                # restarted it. Keep ticking, say so once, and forget what was
+                # painted so the light is repainted the moment it is back.
                 last_signature = None
-                LOGGER.info("Fired hourly chime for slot %s", chime_result["slot"])
-            controller.enable_watchdog(int(config["settings"]["watchdog_millis"]))
+                if light_missing_since is None:
+                    light_missing_since = current
+                    LOGGER.info("Light not connected; will repaint when it is back: %s", error)
+            else:
+                if light_missing_since is not None:
+                    minutes = round((current - light_missing_since).total_seconds() / 60)
+                    LOGGER.info("Light connected again after %s min", minutes)
+                    light_missing_since = None
             write_json(
                 paths.watcher_state_path,
                 {
@@ -307,6 +324,7 @@ def run_watch_loop(
                     "calendar": result.get("calendar"),
                     "chime": chime_result,
                     "timer": result["timer"],
+                    "light_connected": light_missing_since is None,
                 },
             )
             time.sleep(float(config["settings"]["tick_seconds"]))
@@ -320,13 +338,19 @@ def run_watch_loop(
         LOGGER.exception("Watcher exited on an unhandled error")
         raise
     finally:
+        # A light that is not plugged in has no watchdog to disarm and is
+        # already dark, so there is nothing to report for either step.
         try:
             controller.disable_watchdog()
+        except DeviceError:
+            pass
         except Exception:
             LOGGER.exception("Failed disabling watchdog")
         if config["settings"].get("stop_turns_light_off", True):
             try:
                 controller.off()
+            except DeviceError:
+                pass
             except Exception:
                 LOGGER.exception("Failed turning blink(1) off")
         try:

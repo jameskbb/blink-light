@@ -51,6 +51,7 @@ treated as normal rather than as an error:
 - Missed flashes write one `device not connected` line to the log per effect
   per hour, not a stack trace per retry.
 - Re-docking picks up any slot still inside its catch-up window.
+- The watcher keeps running while undocked and repaints the light on re-dock.
 
 ## Calendar: Microsoft Graph
 

@@ -233,10 +233,13 @@ The watcher writes to the same file, tagged `[watcher]`:
 09:00:05 INFO [watcher] Applied action from calendar:available -> {'color': '#00C853', 'fade_ms': 150}
 09:12:35 INFO [watcher] Calendar unavailable, meeting colours paused: Could not reach Microsoft Graph: ...
 09:20:05 INFO [watcher] Calendar available again after 8 min
+12:31:40 INFO [watcher] Light not connected; will repaint when it is back: blink(1) stopped responding: write returned -1 instead of 9
+13:05:10 INFO [watcher] Light connected again after 34 min
 ```
 
-A `Watcher exited on an unhandled error` traceback is why a background watcher
-died. A `Tick failed` traceback repeats at most hourly while the fault lasts,
+Undocking is a note, not a crash: the watcher keeps ticking and repaints the
+light as soon as it is plugged back in. A `Watcher exited on an unhandled error`
+traceback is why a background watcher died. A `Tick failed` traceback repeats at most hourly while the fault lasts,
 and `Ticks recovered after N failed` marks the end of it. A file over 5 MB is
 moved to `blink-light.log.1` the next time the loop or the watcher starts.
 

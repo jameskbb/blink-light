@@ -154,6 +154,11 @@ loop down — one bad device call should not cost you the rest of the day's sche
 Each alarm is attempted and reported on its own, so an unplugged light cannot
 hide one alarm's miss behind another's.
 
+The watcher treats an unplugged light the same way. It keeps ticking, notes the
+loss once, and repaints the light when it is plugged back in. It holds one
+device handle for hours, so the controller drops a handle that stops responding
+and looks for the light afresh on the next call.
+
 The watcher appends to the same file, tagged `[watcher]`, and both write UTF-8.
 It logs when it starts and stops (and why), when the light's action changes, and
 when the calendar stops or starts answering — a calendar error is not an
