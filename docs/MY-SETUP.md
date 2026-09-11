@@ -48,8 +48,8 @@ treated as normal rather than as an error:
 
 - Both scheduled tasks are allowed to start on battery, so the schedule keeps
   running while undocked.
-- Missed flashes write one `device not connected` line to the log per hour,
-  not a stack trace per retry.
+- Missed flashes write one `device not connected` line to the log per effect
+  per hour, not a stack trace per retry.
 - Re-docking picks up any slot still inside its catch-up window.
 
 ## Calendar: Microsoft Graph

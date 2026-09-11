@@ -112,6 +112,19 @@ class AbsentDeviceLoggingTests(unittest.TestCase):
         skipped = [line for line in self._log().splitlines() if "device not connected" in line]
         self.assertEqual(len(skipped), 2)
 
+    def test_a_missed_alarm_gets_its_own_note_after_the_chime_already_had_one(self) -> None:
+        # One note per hour used to cover every effect, so the 08:00 chime's
+        # note hid both standup alarms that missed later in the same hour.
+        # Two minutes pass per wake, so nine wakes reach both alarm windows.
+        start = datetime(2026, 4, 2, 8, 0, 1, tzinfo=timezone.utc)
+        self._run(AbsentController, start, iterations=9)
+
+        skipped = [line for line in self._log().splitlines() if "device not connected" in line]
+        self.assertEqual(len(skipped), 3)
+        self.assertIn("Chime skipped", skipped[0])
+        self.assertIn("Alarm standup_warning skipped", skipped[1])
+        self.assertIn("Alarm standup_now skipped", skipped[2])
+
     def test_a_real_failure_still_logs_its_traceback(self) -> None:
         start = datetime(2026, 4, 2, 12, 0, 1, tzinfo=timezone.utc)
         self._run(BrokenController, start, iterations=1)

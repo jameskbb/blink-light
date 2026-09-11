@@ -39,6 +39,27 @@ def remove_file(path: Path) -> None:
         return
 
 
+LOG_MAX_BYTES = 5 * 1024 * 1024
+
+
+def rotate_log(path: Path, max_bytes: int = LOG_MAX_BYTES) -> bool:
+    """Move an oversized log aside to ``<name>.1`` before a process opens it.
+
+    The scheduler loop and the watcher append to the same file from separate
+    processes, and Windows refuses to rename a file another process holds open.
+    A size-triggered RotatingFileHandler would hit that mid-run and drop lines,
+    so rotation happens only at start, and a refused rename just leaves the log
+    to grow until a later start manages it.
+    """
+    try:
+        if path.stat().st_size < max_bytes:
+            return False
+        os.replace(path, path.with_name(path.name + ".1"))
+    except OSError:
+        return False
+    return True
+
+
 def read_text(path: Path, default: str = "") -> str:
     if not path.exists():
         return default

@@ -226,14 +226,21 @@ A `Loop started` with no matching `Loop stopped` means it is still running. A
 stack trace means an effect failed — the loop logs and carries on rather than
 dying, so one bad device call does not cost you the day's schedule.
 
+The watcher writes to the same file, one line each time the light's state
+changes. A file over 5 MB is moved to `blink-light.log.1` the next time the
+loop or the watcher starts.
+
 An undocked machine is the exception, and gets one line rather than a
 traceback:
 
 ```
-09:00:00 INFO [chime] Chime skipped, device not connected: Configured blink(1) serial '12ab34cd' is not connected.
+08:00:00 INFO [chime] Chime skipped, device not connected: Configured blink(1) serial '12ab34cd' is not connected.
+08:15:01 INFO [chime] Alarm standup_now skipped, device not connected: Configured blink(1) serial '12ab34cd' is not connected.
 ```
 
-One line per hour, however many times the catch-up window retries that slot.
+One line per effect per hour — the chime, the show and each alarm get their
+own — however many times the catch-up window retries that slot, so a missed
+standup is visible even when the chime already noted the light was gone.
 It is a note, not a fault: plug the light back in and the next slot chimes.
 Anything that is *not* a missing device still gets its full stack trace, which
 is the point — the tracebacks left in the log are the ones worth reading.

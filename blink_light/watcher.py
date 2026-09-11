@@ -19,7 +19,7 @@ from .calendar_source import (
 )
 from .paths import AppPaths, ensure_runtime_dirs
 from .rules import first_matching_rule, is_between_times
-from .state import is_process_running, read_json, remove_file, write_json
+from .state import is_process_running, read_json, remove_file, rotate_log, write_json
 from .system_state import collect_system_snapshot
 from .timers import TimerSnapshot, refresh_timer_state
 
@@ -217,6 +217,7 @@ def run_watch_loop(
     if existing["running"] and existing["pid"] != os.getpid():
         raise RuntimeError(f"Watcher already running with PID {existing['pid']}.")
 
+    rotate_log(paths.log_path)
     logging.basicConfig(
         filename=paths.log_path,
         level=logging.INFO,
@@ -254,6 +255,9 @@ def run_watch_loop(
                 controller.apply_action(result["action"], config["scenes"], persistent=True)
                 acknowledge_calendar_result(paths, result, now=current)
                 last_signature = signature
+                # Only on a change: at a 5-second tick, a line per tick was
+                # ~17,000 identical lines a day burying the scheduler's own.
+                logging.info("Applied action from %s:%s -> %s", result["source"], result["detail"], result["action"])
             chime_result = maybe_fire_chime(config, paths, controller=controller, now=current)
             if chime_result["fired"]:
                 # The chime leaves the LED wherever the pulse ended, so drop the
@@ -274,7 +278,6 @@ def run_watch_loop(
                     "timer": result["timer"],
                 },
             )
-            logging.info("Applied action from %s:%s -> %s", result["source"], result["detail"], result["action"])
             time.sleep(float(config["settings"]["tick_seconds"]))
     except KeyboardInterrupt:
         logging.info("Watcher interrupted")

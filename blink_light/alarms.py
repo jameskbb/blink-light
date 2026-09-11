@@ -15,7 +15,7 @@ Omitting `days` means every day.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
 
 from .device import BlinkDeviceController
 from .paths import AppPaths, ensure_runtime_dirs
@@ -180,11 +180,15 @@ def fire_due_alarms(
     controller=None,
     now: datetime | None = None,
     source: str = "scheduler",
+    on_error: Callable[[dict[str, Any], BaseException], None] | None = None,
 ) -> list[dict[str, Any]]:
     """Fire every alarm that is currently due.
 
-    Returns one result per alarm that actually fired. A failure on one alarm
-    must not stop the others, so each is attempted independently.
+    Returns one result per alarm that actually fired. With ``on_error``, a
+    failure on one alarm is handed to it and the rest are still attempted - the
+    scheduler needs that, or an unplugged light on the first alarm leaves the
+    next one untried and unreported. Without it the first failure raises, so a
+    one-shot ``alarm now`` still surfaces the error.
     """
     current = now or _now()
     results = []
@@ -192,8 +196,8 @@ def fire_due_alarms(
         due, _reason, slot = should_fire(config, paths, alarm, current)
         if not due:
             continue
-        results.append(
-            fire_alarm(
+        try:
+            result = fire_alarm(
                 config,
                 paths,
                 alarm,
@@ -203,7 +207,12 @@ def fire_due_alarms(
                 slot=slot,
                 source=source,
             )
-        )
+        except Exception as error:
+            if on_error is None:
+                raise
+            on_error(alarm, error)
+            continue
+        results.append(result)
     return results
 
 

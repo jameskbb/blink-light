@@ -23,7 +23,7 @@ from typing import Any, Callable
 from .device import BlinkDeviceController, DeviceError
 from .paths import AppPaths, ensure_runtime_dirs
 from .rules import is_between_times
-from .state import is_process_running, read_json, remove_file, write_json
+from .state import is_process_running, read_json, remove_file, rotate_log, write_json
 
 TASK_NAME = "BlinkLight Hourly Chime"
 AUTOSTART_TASK_NAME = "BlinkLight Autostart"
@@ -51,6 +51,7 @@ def configure_loop_logging(paths: AppPaths) -> logging.Handler:
     """
     ensure_runtime_dirs(paths)
     release_loop_logging()
+    rotate_log(paths.log_path)
     handler = logging.FileHandler(paths.log_path, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [chime] %(message)s"))
     LOGGER.addHandler(handler)
@@ -358,16 +359,22 @@ def run_chime_loop(
     # An undocked laptop is not a fault - the light is simply not there. Each
     # missed slot is retried once a minute through the catch-up window, so a
     # stack trace per attempt buried the real failures under five identical
-    # copies. Report an absent device once per hour instead, and keep the full
-    # traceback for everything else.
-    absent_reported_for: str | None = None
+    # copies. Report an absent device once per effect per hour instead, and keep
+    # the full traceback for everything else. Per effect, because one note for
+    # the whole hour let the chime's note swallow an alarm that missed later in
+    # that hour, and a missed standup left no line at all.
+    absent_hour: str | None = None
+    absent_reported: set[str] = set()
 
     def log_effect_failure(label: str, error: BaseException, at: datetime) -> None:
-        nonlocal absent_reported_for
+        nonlocal absent_hour
         if isinstance(error, DeviceError):
             hour = at.replace(minute=0, second=0, microsecond=0).isoformat()
-            if absent_reported_for != hour:
-                absent_reported_for = hour
+            if absent_hour != hour:
+                absent_hour = hour
+                absent_reported.clear()
+            if label not in absent_reported:
+                absent_reported.add(label)
                 LOGGER.info("%s skipped, device not connected: %s", label, error)
             return
         LOGGER.error("%s failed", label, exc_info=error)
@@ -421,6 +428,7 @@ def run_chime_loop(
                     controller_cls=controller_cls,
                     now=current,
                     source="chime-run",
+                    on_error=lambda alarm, error: log_effect_failure(f"Alarm {alarm['name']}", error, current),
                 ):
                     alarms += 1
                     LOGGER.info("Fired alarm %s", result["alarm"])

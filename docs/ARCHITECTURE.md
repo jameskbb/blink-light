@@ -151,6 +151,17 @@ signal would be a scheduled-task result code. It logs to
 
 A failure in one effect is caught, logged, and stepped over rather than taking the
 loop down — one bad device call should not cost you the rest of the day's schedule.
+Each alarm is attempted and reported on its own, so an unplugged light cannot
+hide one alarm's miss behind another's.
+
+The watcher appends to the same file, but only when the light's action changes;
+at a 5-second tick, a line per tick would bury the scheduler's lines.
+
+Neither process rotates the file while running. Windows will not rename a file
+another process holds open, so a size-triggered rotation would fail mid-run and
+drop lines. Instead each start moves a log over 5 MB aside to `blink-light.log.1`,
+replacing the previous one; if the other process has it open, the move is
+skipped and a later start tries again.
 
 ### Why a slot, not a timestamp
 
