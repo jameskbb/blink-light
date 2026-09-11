@@ -15,7 +15,7 @@ Run everything from the repo root. `blink-light.bat` creates `.venv` and install
 2. Run `blink-light.bat github check --dry-run` to preview without a flash or state change.
 3. Run `blink-light.bat github test` to play the orange-red heartbeat once (2.40 seconds).
 4. After a config change, run `blink-light.bat autostart enable` to restart the scheduler.
-5. Read `%LOCALAPPDATA%\BlinkLight\blink-light.log` for `GitHub: poll 200`, `GitHub: poll 304`, or `GitHub: workflow run failed`.
+5. Read `%LOCALAPPDATA%\BlinkLight\blink-light.log` for `GitHub: poll 200`, `GitHub: poll 304`, or `GitHub: workflow run failed`. The 304 line appears once after a start, a 200, or a logged error, not on every unchanged poll.
 
 The integration is off by default. Add `"github": { "enabled": true }` to the local
 `blink-light.json`. Run `blink-light.bat config validate` before the restart.
@@ -226,9 +226,19 @@ A `Loop started` with no matching `Loop stopped` means it is still running. A
 stack trace means an effect failed — the loop logs and carries on rather than
 dying, so one bad device call does not cost you the day's schedule.
 
-The watcher writes to the same file, one line each time the light's state
-changes. A file over 5 MB is moved to `blink-light.log.1` the next time the
-loop or the watcher starts.
+The watcher writes to the same file, tagged `[watcher]`:
+
+```
+09:00:05 INFO [watcher] Watcher started (PID 20488)
+09:00:05 INFO [watcher] Applied action from calendar:available -> {'color': '#00C853', 'fade_ms': 150}
+09:12:35 INFO [watcher] Calendar unavailable, meeting colours paused: Could not reach Microsoft Graph: ...
+09:20:05 INFO [watcher] Calendar available again after 8 min
+```
+
+A `Watcher exited on an unhandled error` traceback is why a background watcher
+died. A `Tick failed` traceback repeats at most hourly while the fault lasts,
+and `Ticks recovered after N failed` marks the end of it. A file over 5 MB is
+moved to `blink-light.log.1` the next time the loop or the watcher starts.
 
 An undocked machine is the exception, and gets one line rather than a
 traceback:

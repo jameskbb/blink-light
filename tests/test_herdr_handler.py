@@ -12,6 +12,7 @@ import os
 import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 HANDLER_PATH = Path(__file__).resolve().parents[1] / "integrations" / "herdr" / "handler.py"
 
@@ -25,6 +26,37 @@ def _load_handler():
 
 
 handler = _load_handler()
+
+
+class LogRotationTests(unittest.TestCase):
+    """Herdr writes a line per agent status change; the file must not grow forever."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        os.environ["HERDR_PLUGIN_STATE_DIR"] = self.tempdir.name
+        self.addCleanup(os.environ.pop, "HERDR_PLUGIN_STATE_DIR", None)
+        self.log = Path(self.tempdir.name) / "blink-light-herdr.log"
+        self.rotated = Path(self.tempdir.name) / "blink-light-herdr.log.1"
+
+    def test_an_oversized_log_is_moved_aside_before_the_next_line(self) -> None:
+        self.log.write_bytes(b"x" * handler.LOG_MAX_BYTES)
+
+        handler.log("fired: agent_done for w7:p1")
+
+        self.assertEqual(self.rotated.stat().st_size, handler.LOG_MAX_BYTES)
+        lines = self.log.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertIn("fired: agent_done for w7:p1", lines[0])
+
+    def test_a_refused_rename_still_writes_the_line(self) -> None:
+        # Another handler holding the file open makes Windows refuse the move.
+        self.log.write_bytes(b"x" * handler.LOG_MAX_BYTES)
+
+        with patch.object(handler.os, "replace", side_effect=PermissionError("in use")):
+            handler.log("fired: agent_done for w7:p1")
+
+        self.assertTrue(self.log.read_text(encoding="utf-8").endswith("fired: agent_done for w7:p1\n"))
 
 
 class StatusExtractionTests(unittest.TestCase):

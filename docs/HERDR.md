@@ -147,7 +147,8 @@ someone's terminal is worse than one that quietly does nothing — a missing dev
 a stale config, a malformed payload all end in a log line and a clean exit.
 
 The log is at `%APPDATA%\herdr\plugins\state\blinklight.agent-status\blink-light-herdr.log`
-(Herdr sets `HERDR_PLUGIN_STATE_DIR`; it falls back to `%TEMP%`):
+(Herdr sets `HERDR_PLUGIN_STATE_DIR`; it falls back to `%TEMP%`). Once it
+reaches 1 MB it moves to `blink-light-herdr.log.1`, replacing the previous one:
 
 ```
 15:49:44 skip: w7:p2 -> working (not notify-worthy)

@@ -149,6 +149,7 @@ class GitHubPoller:
         self._auth_rejected = False
         self.next_poll_at = 0.0
         self._last_error_at: float | None = None
+        self._unchanged_logged = False
 
     def seconds_until_next_poll(self, now: datetime) -> float | None:
         if not self.config["github"]["enabled"]:
@@ -228,6 +229,7 @@ class GitHubPoller:
                 if self._last_error_at is None or now.timestamp() - self._last_error_at >= 3600:
                     LOGGER.info("GitHub: %s", error)
                     self._last_error_at = now.timestamp()
+                    self._unchanged_logged = False
             return {"polled": True, "result": "error", "error": str(error),
                     "flashed": [], "dry_run": dry_run}
 
@@ -240,7 +242,13 @@ class GitHubPoller:
         if status == 304:
             if not dry_run:
                 write_json(self.paths.github_state_path, state)
-                LOGGER.info("GitHub: poll 304 (unchanged)")
+                # Nearly every poll is a 304, so a line each was ~1,440 a day
+                # saying the same thing. One line proves polling works; a 200
+                # or a logged error re-arms it. Re-arming on every error would
+                # let a flaky network bring the flood back.
+                if not self._unchanged_logged:
+                    LOGGER.info("GitHub: poll 304 (unchanged)")
+                    self._unchanged_logged = True
             return {"polled": True, "result": 304, "flashed": [], "dry_run": dry_run}
 
         baseline = not state.get("initialized", False)
@@ -509,6 +517,7 @@ class GitHubPoller:
             "GitHub: poll 200 (%s failures, %s pull request events, baseline=%s, quiet=%s)",
             len(matches), len(pr_matches), baseline, suppressed,
         )
+        self._unchanged_logged = False
         if review_checks_skipped:
             LOGGER.info(
                 "GitHub: %s pull request review checks skipped (%s)",

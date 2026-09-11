@@ -21,9 +21,10 @@ import tempfile
 from typing import Any, Callable
 
 from .device import BlinkDeviceController, DeviceError
+from .log_file import close_log, open_log
 from .paths import AppPaths, ensure_runtime_dirs
 from .rules import is_between_times
-from .state import is_process_running, read_json, remove_file, rotate_log, write_json
+from .state import is_process_running, read_json, remove_file, write_json
 
 TASK_NAME = "BlinkLight Hourly Chime"
 AUTOSTART_TASK_NAME = "BlinkLight Autostart"
@@ -50,19 +51,11 @@ def configure_loop_logging(paths: AppPaths) -> logging.Handler:
     were ever run more than once in one process.
     """
     ensure_runtime_dirs(paths)
-    release_loop_logging()
-    rotate_log(paths.log_path)
-    handler = logging.FileHandler(paths.log_path, encoding="utf-8")
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [chime] %(message)s"))
-    LOGGER.addHandler(handler)
-    LOGGER.setLevel(logging.INFO)
-    return handler
+    return open_log(LOGGER, paths.log_path, "chime")
 
 
 def release_loop_logging() -> None:
-    for handler in list(LOGGER.handlers):
-        LOGGER.removeHandler(handler)
-        handler.close()
+    close_log(LOGGER)
 
 
 def chime_settings(config: dict[str, Any]) -> dict[str, Any]:

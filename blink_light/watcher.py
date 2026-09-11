@@ -17,11 +17,15 @@ from .calendar_source import (
     acknowledge_calendar_result,
     evaluate_calendar_action,
 )
+from .log_file import close_log, open_log
 from .paths import AppPaths, ensure_runtime_dirs
 from .rules import first_matching_rule, is_between_times
-from .state import is_process_running, read_json, remove_file, rotate_log, write_json
+from .state import is_process_running, read_json, remove_file, write_json
 from .system_state import collect_system_snapshot
 from .timers import TimerSnapshot, refresh_timer_state
+
+
+LOGGER = logging.getLogger("blink_light.watcher")
 
 
 def _now() -> datetime:
@@ -213,43 +217,70 @@ def run_watch_loop(
 ) -> dict[str, Any]:
     del background
     ensure_runtime_dirs(paths)
+    open_log(LOGGER, paths.log_path, "watcher")
     existing = watch_status(paths)
     if existing["running"] and existing["pid"] != os.getpid():
+        LOGGER.error("Refusing to start: watcher already running with PID %s", existing["pid"])
+        close_log(LOGGER)
         raise RuntimeError(f"Watcher already running with PID {existing['pid']}.")
-
-    rotate_log(paths.log_path)
-    logging.basicConfig(
-        filename=paths.log_path,
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
 
     controller = controller_cls(serial=config["device"].get("serial"))
     calendar_cache = CalendarCache(config, paths=paths)
     paths.watcher_pid_path.write_text(str(os.getpid()), encoding="utf-8")
     remove_file(paths.watcher_stop_path)
+    LOGGER.info("Watcher started (PID %s)", os.getpid())
     last_signature = None
+    stopped_by = None
+    # A fault that persists fails every 5-second tick, and a traceback per tick
+    # is the same flood as an action line per tick. Keep the traceback that
+    # starts a run of failures, one an hour while it lasts - so a different
+    # fault later is not hidden for the day - and one line when it clears.
+    failed_ticks = 0
+    tick_error_logged_at: datetime | None = None
+    # A calendar that cannot be read is not an exception: the snapshot carries
+    # the error and the light quietly falls back to rules and the default, so
+    # meeting colours stopped with nothing in the log. Graph error bodies carry
+    # a request id and date, so the message differs every poll; log the outage
+    # starting and ending, not each message.
+    calendar_down_since: datetime | None = None
     try:
         while True:
             if paths.watcher_stop_path.exists():
+                stopped_by = "stop-file"
                 break
             current = now_factory()
             try:
+                calendar_snapshot = calendar_cache.get(current)
                 result = determine_action(
                     config,
                     paths,
                     snapshot_factory=snapshot_factory,
                     now=current,
-                    calendar_snapshot=calendar_cache.get(current),
+                    calendar_snapshot=calendar_snapshot,
                 )
             except Exception:
                 # One bad tick - a malformed calendar entry, a transient COM
                 # failure - used to kill the loop and take the light with it.
                 # Log it and try again next tick; the light keeps showing
                 # whatever it was showing.
-                logging.exception("Tick failed; keeping the previous action")
+                failed_ticks += 1
+                if tick_error_logged_at is None or (current - tick_error_logged_at).total_seconds() >= 3600:
+                    tick_error_logged_at = current
+                    LOGGER.exception("Tick failed; keeping the previous action")
                 time.sleep(float(config["settings"]["tick_seconds"]))
                 continue
+            if failed_ticks:
+                LOGGER.info("Ticks recovered after %s failed", failed_ticks)
+                failed_ticks = 0
+                tick_error_logged_at = None
+            calendar_error = calendar_snapshot.error if calendar_snapshot is not None else None
+            if calendar_error and calendar_down_since is None:
+                calendar_down_since = current
+                LOGGER.info("Calendar unavailable, meeting colours paused: %s", calendar_error)
+            elif not calendar_error and calendar_down_since is not None:
+                minutes = round((current - calendar_down_since).total_seconds() / 60)
+                LOGGER.info("Calendar available again after %s min", minutes)
+                calendar_down_since = None
             signature = json.dumps(result["action"], sort_keys=True)
             if signature != last_signature:
                 controller.apply_action(result["action"], config["scenes"], persistent=True)
@@ -257,13 +288,13 @@ def run_watch_loop(
                 last_signature = signature
                 # Only on a change: at a 5-second tick, a line per tick was
                 # ~17,000 identical lines a day burying the scheduler's own.
-                logging.info("Applied action from %s:%s -> %s", result["source"], result["detail"], result["action"])
+                LOGGER.info("Applied action from %s:%s -> %s", result["source"], result["detail"], result["action"])
             chime_result = maybe_fire_chime(config, paths, controller=controller, now=current)
             if chime_result["fired"]:
                 # The chime leaves the LED wherever the pulse ended, so drop the
                 # cached signature and let the next tick repaint the real state.
                 last_signature = None
-                logging.info("Fired hourly chime for slot %s", chime_result["slot"])
+                LOGGER.info("Fired hourly chime for slot %s", chime_result["slot"])
             controller.enable_watchdog(int(config["settings"]["watchdog_millis"]))
             write_json(
                 paths.watcher_state_path,
@@ -280,29 +311,40 @@ def run_watch_loop(
             )
             time.sleep(float(config["settings"]["tick_seconds"]))
     except KeyboardInterrupt:
-        logging.info("Watcher interrupted")
+        stopped_by = "interrupt"
+    except Exception:
+        # The background watcher runs with stderr discarded, so a crash - a
+        # light unplugged while it runs - used to leave nothing behind, while
+        # start_background_watch tells you to read this very log.
+        stopped_by = "error"
+        LOGGER.exception("Watcher exited on an unhandled error")
+        raise
     finally:
         try:
             controller.disable_watchdog()
         except Exception:
-            logging.exception("Failed disabling watchdog")
+            LOGGER.exception("Failed disabling watchdog")
         if config["settings"].get("stop_turns_light_off", True):
             try:
                 controller.off()
             except Exception:
-                logging.exception("Failed turning blink(1) off")
-        controller.close()
-        remove_file(paths.watcher_pid_path)
-        remove_file(paths.watcher_stop_path)
-        write_json(
-            paths.watcher_state_path,
-            {
-                "pid": None,
-                "updated_at": now_factory().isoformat(),
-                "running": False,
-                "stopped": True,
-            },
-        )
+                LOGGER.exception("Failed turning blink(1) off")
+        try:
+            controller.close()
+            remove_file(paths.watcher_pid_path)
+            remove_file(paths.watcher_stop_path)
+            write_json(
+                paths.watcher_state_path,
+                {
+                    "pid": None,
+                    "updated_at": now_factory().isoformat(),
+                    "running": False,
+                    "stopped": True,
+                },
+            )
+        finally:
+            LOGGER.info("Watcher stopped (%s)", stopped_by)
+            close_log(LOGGER)
     return watch_status(paths)
 
 

@@ -2,8 +2,10 @@
 
 The watcher ticks every five seconds and used to log its action on every tick,
 about 17,000 identical lines a day into the file the scheduler also writes, and
-nothing ever trimmed that file. These pin one line per change, and a rotation
-at process start that can never take the process down.
+nothing ever trimmed that file. These pin one line per change, a rotation at
+process start that can never take the process down, and the watcher lines that
+were missing: which process wrote a line, why it stopped, and a calendar that
+quietly stopped answering.
 """
 
 from __future__ import annotations
@@ -15,8 +17,10 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from blink_light.calendar_source import CalendarSnapshot
 from blink_light.chime import configure_loop_logging, release_loop_logging
 from blink_light.defaults import default_config
+from blink_light.log_file import close_log
 from blink_light.paths import build_paths
 from blink_light.state import LOG_MAX_BYTES, rotate_log, write_json
 from blink_light.watcher import run_watch_loop
@@ -42,6 +46,11 @@ class QuietController:
         pass
 
 
+class CrashingController(QuietController):
+    def apply_action(self, action: dict, scenes: dict, persistent: bool) -> None:
+        raise RuntimeError("invented crash")
+
+
 def _paths(root: Path):
     return build_paths(
         config_path=root / "blink-light.json",
@@ -55,6 +64,9 @@ class WatcherLogTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tempdir.cleanup)
+        # The watcher closes its own log, but a test that fails half-way must
+        # not leave the file open and block the temp directory's cleanup.
+        self.addCleanup(close_log, logging.getLogger("blink_light.watcher"))
         self.paths = _paths(Path(self.tempdir.name))
         self.config = default_config()
         self.config["calendar"]["enabled"] = False
@@ -62,23 +74,7 @@ class WatcherLogTests(unittest.TestCase):
         self.config["rules"] = []
         self.config["settings"]["quiet_hours"]["enabled"] = False
 
-        # basicConfig does nothing once the root logger has a handler, and the
-        # file handler it opens would block the temp directory's cleanup on
-        # Windows, so hand the watcher a bare root logger and close up after.
-        root = logging.getLogger()
-        saved_handlers = root.handlers[:]
-        saved_level = root.level
-        root.handlers = []
-
-        def restore() -> None:
-            for handler in root.handlers:
-                handler.close()
-            root.handlers = saved_handlers
-            root.setLevel(saved_level)
-
-        self.addCleanup(restore)
-
-    def _applied_lines(self, ticks: int, on_tick=None) -> list[str]:
+    def _log(self, ticks: int, on_tick=None, controller_cls=QuietController) -> str:
         count = {"ticks": 0}
 
         def fake_sleep(seconds: float) -> None:
@@ -92,14 +88,14 @@ class WatcherLogTests(unittest.TestCase):
             run_watch_loop(
                 self.config,
                 self.paths,
-                controller_cls=QuietController,
+                controller_cls=controller_cls,
                 snapshot_factory=lambda now: None,
                 now_factory=lambda: datetime(2026, 4, 2, 12, 0, tzinfo=timezone.utc),
             )
-        for handler in logging.getLogger().handlers:
-            handler.flush()
-        text = self.paths.log_path.read_text(encoding="utf-8")
-        return [line for line in text.splitlines() if "Applied action" in line]
+        return self.paths.log_path.read_text(encoding="utf-8")
+
+    def _applied_lines(self, ticks: int, on_tick=None) -> list[str]:
+        return [line for line in self._log(ticks, on_tick).splitlines() if "Applied action" in line]
 
     def test_an_unchanged_action_is_logged_once_not_every_tick(self) -> None:
         lines = self._applied_lines(ticks=6)
@@ -116,6 +112,66 @@ class WatcherLogTests(unittest.TestCase):
 
         self.assertEqual(len(lines), 2)
         self.assertIn("override:focus", lines[1])
+
+    def test_watcher_lines_say_which_process_wrote_them_and_why_it_stopped(self) -> None:
+        log = self._log(ticks=2)
+
+        self.assertIn("[watcher] Watcher started (PID", log)
+        self.assertIn("[watcher] Watcher stopped (stop-file)", log)
+
+    def test_a_character_outside_the_windows_code_page_is_written_intact(self) -> None:
+        # basicConfig wrote in the code page, so this line was dropped outright.
+        write_json(self.paths.override_path, {"action": {"preset": "busy"}, "reason": "focus 🎧"})
+
+        lines = self._applied_lines(ticks=2)
+
+        self.assertIn("override:focus 🎧", lines[0])
+
+    def test_a_crash_leaves_its_traceback_in_the_log(self) -> None:
+        with self.assertRaises(RuntimeError):
+            self._log(ticks=2, controller_cls=CrashingController)
+
+        log = self.paths.log_path.read_text(encoding="utf-8")
+        self.assertIn("Watcher exited on an unhandled error", log)
+        self.assertIn("invented crash", log)
+        self.assertIn("Watcher stopped (error)", log)
+
+    def test_a_fault_that_persists_logs_one_traceback_not_one_per_tick(self) -> None:
+        calls = {"count": 0}
+        recovered = {"source": "default", "detail": "settings.default_action", "action": {"color": "#000000"}, "timer": {}}
+
+        def flaky(*args, **kwargs):
+            calls["count"] += 1
+            if calls["count"] <= 4:
+                raise ValueError("invented bad tick")
+            return recovered
+
+        with patch("blink_light.watcher.determine_action", side_effect=flaky):
+            log = self._log(ticks=6)
+
+        self.assertEqual(log.count("Traceback"), 1)
+        self.assertEqual(log.count("Tick failed"), 1)
+        self.assertIn("Ticks recovered after 4 failed", log)
+
+    def test_a_calendar_outage_is_logged_when_it_starts_and_when_it_ends(self) -> None:
+        self.config["calendar"]["enabled"] = True
+
+        class FlakyCalendar:
+            def __init__(self, config, poller=None, paths=None):
+                self.calls = 0
+
+            def get(self, now):
+                self.calls += 1
+                # A different message each poll, as Graph's request ids make it.
+                error = f"Graph returned 401: request {self.calls}" if self.calls <= 3 else None
+                return CalendarSnapshot(provider="graph", fetched_at=now, events=[], error=error)
+
+        with patch("blink_light.watcher.CalendarCache", FlakyCalendar):
+            log = self._log(ticks=6)
+
+        self.assertEqual(log.count("Calendar unavailable"), 1)
+        self.assertIn("meeting colours paused: Graph returned 401: request 1", log)
+        self.assertEqual(log.count("Calendar available again"), 1)
 
 
 class LogRotationTests(unittest.TestCase):

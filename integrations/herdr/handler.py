@@ -75,10 +75,28 @@ def state_path() -> Path:
     return _state_dir() / "pane-state.json"
 
 
+LOG_MAX_BYTES = 1024 * 1024
+
+
+def _rotate_log(path: Path) -> None:
+    """Keep one old log beside the live one.
+
+    Every agent status change writes a line and nothing else ever trims the
+    file. A rename refused because another handler has the file open just
+    leaves it for the next call - it must not cost this call its own line.
+    """
+    try:
+        if path.stat().st_size >= LOG_MAX_BYTES:
+            os.replace(path, path.with_name(path.name + ".1"))
+    except OSError:
+        pass
+
+
 def log(message: str) -> None:
     try:
         path = log_path()
         path.parent.mkdir(parents=True, exist_ok=True)
+        _rotate_log(path)
         with path.open("a", encoding="utf-8") as handle:
             handle.write(f"{datetime.now().isoformat(timespec='seconds')} {message}\n")
     except OSError:

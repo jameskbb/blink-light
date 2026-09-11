@@ -154,8 +154,15 @@ loop down — one bad device call should not cost you the rest of the day's sche
 Each alarm is attempted and reported on its own, so an unplugged light cannot
 hide one alarm's miss behind another's.
 
-The watcher appends to the same file, but only when the light's action changes;
-at a 5-second tick, a line per tick would bury the scheduler's lines.
+The watcher appends to the same file, tagged `[watcher]`, and both write UTF-8.
+It logs when it starts and stops (and why), when the light's action changes, and
+when the calendar stops or starts answering — a calendar error is not an
+exception, so without that line meeting colours stopped silently. At a 5-second
+tick anything logged per tick would bury the scheduler's lines, so a fault that
+keeps failing ticks gets one traceback an hour and a line when it clears.
+
+The same rule holds for GitHub: one `poll 304 (unchanged)` line after start, a
+`poll 200`, or a logged error — not one a minute.
 
 Neither process rotates the file while running. Windows will not rename a file
 another process holds open, so a size-triggered rotation would fail mid-run and

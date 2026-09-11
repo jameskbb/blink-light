@@ -329,6 +329,14 @@ class GitHubTests(unittest.TestCase):
         self.assertIn("Traceback", log)
         self.assertIn("GitHub failed", log)
 
+    def test_an_unchanged_feed_is_logged_once_per_quiet_stretch_not_every_poll(self):
+        responses = iter([(200, {}, []), (304, {}, None), (304, {}, None), (304, {}, None),
+                          (200, {}, []), (304, {}, None), (304, {}, None)])
+        fetcher = Mock(side_effect=lambda *args, **kwargs: next(responses, (304, {}, None)))
+        summary, log = self.run_loop(iterations=10, fetcher=fetcher)
+        self.assertGreaterEqual(fetcher.call_count, 7)
+        self.assertEqual(log.count("GitHub: poll 304 (unchanged)"), 2)
+
     def test_the_scheduler_polls_once_per_due_wake_and_flashes_one_failure(self):
         self.fetcher.side_effect = [(200, {}, []), (200, {"X-Poll-Interval": "120"}, [notification()]),
                                     (304, {}, None)]
