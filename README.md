@@ -1,6 +1,6 @@
 # blink-light
 
-![Blink Light title card: a two-LED USB desk light glows cyan and amber beside flowing notification signals](docs/images/readme-title-blink-light.png)
+![Blink Light title card: a real blink(1) mk2 glows from a laptop USB port beside flowing notification signals](docs/images/readme-title-blink-light.png)
 
 Turn a [`blink(1)`](https://blink1.thingm.com/) USB light into an ambient status display for your desk. It warns you before meetings and glows red while you're in one, chimes on the hour, plays a short rainbow at the end of the day, fires named daily alarms, and lights up when an AI coding agent finishes or gets stuck.
 
@@ -10,7 +10,7 @@ Windows-first, written in Python, no admin rights needed. One batch file sets ev
 
 ---
 
-![Install and quick start section header: a two-LED desk light comes alive from clone to first glow](docs/images/readme-header-setup.png)
+![Install and quick start section header: a blink(1) plugged into a laptop comes alive from clone to first glow](docs/images/readme-header-setup.png)
 
 ## Requirements
 
@@ -54,7 +54,7 @@ For full first-time setup — installing the scheduled tasks, verifying the chim
 | [Herdr](docs/HERDR.md) | make the light react when an AI coding agent finishes or gets blocked |
 | [My setup](docs/MY-SETUP.md) | see how the author runs it day to day |
 
-![What the light does section header: breathing, heartbeat, relay, and rainbow signals rise from the desk light](docs/images/readme-header-behaviour.png)
+![What the light does section header: breathing, heartbeat, relay, and rainbow signals flow into a blink(1)](docs/images/readme-header-behaviour.png)
 
 ## What the light does
 
@@ -234,7 +234,7 @@ Setting `alarms` in your config **replaces** the defaults rather than merging,
 so `"alarms": []` disables both shipped ones. Add `"days"` to either default
 to skip weekends.
 
-![Notifications and GitHub section header: completion, warning, and review signals flow into the desk light](docs/images/readme-header-signals.png)
+![Notifications and GitHub section header: completion, warning, and review signals flow into a blink(1)](docs/images/readme-header-signals.png)
 
 ## Notifications
 
@@ -383,7 +383,7 @@ to start on battery, so an undocked laptop still keeps the schedule. See
 calendar watcher instead of just the chime loop, so use it if you want
 calendar colours without a login task.
 
-![Calendar and config section header: meetings, rules, and presets become ambient light](docs/images/readme-header-automation.png)
+![Calendar and config section header: meetings, rules, and presets become ambient light through a blink(1)](docs/images/readme-header-automation.png)
 
 ## Calendar
 
