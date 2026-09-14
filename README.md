@@ -1,5 +1,7 @@
 # blink-light
 
+![Blink Light title card: a two-LED USB desk light glows cyan and amber beside flowing notification signals](docs/images/readme-title-blink-light.png)
+
 Turn a [`blink(1)`](https://blink1.thingm.com/) USB light into an ambient status display for your desk. It warns you before meetings and glows red while you're in one, chimes on the hour, plays a short rainbow at the end of the day, fires named daily alarms, and lights up when an AI coding agent finishes or gets stuck.
 
 Windows-first, written in Python, no admin rights needed. One batch file sets everything up.
@@ -7,6 +9,8 @@ Windows-first, written in Python, no admin rights needed. One batch file sets ev
 > **The defaults are one person's working day** — standup alerts at 08:13, dark from 17:00. Change any of them in your own config (see [Config](#config)). [My setup](docs/MY-SETUP.md) shows how the author runs it and why.
 
 ---
+
+![Install and quick start section header: a two-LED desk light comes alive from clone to first glow](docs/images/readme-header-setup.png)
 
 ## Requirements
 
@@ -49,6 +53,8 @@ For full first-time setup — installing the scheduled tasks, verifying the chim
 | [Effects](docs/EFFECTS.md) | design your own flashes — with pasteable scenes |
 | [Herdr](docs/HERDR.md) | make the light react when an AI coding agent finishes or gets blocked |
 | [My setup](docs/MY-SETUP.md) | see how the author runs it day to day |
+
+![What the light does section header: breathing, heartbeat, relay, and rainbow signals rise from the desk light](docs/images/readme-header-behaviour.png)
 
 ## What the light does
 
@@ -228,6 +234,8 @@ Setting `alarms` in your config **replaces** the defaults rather than merging,
 so `"alarms": []` disables both shipped ones. Add `"days"` to either default
 to skip weekends.
 
+![Notifications and GitHub section header: completion, warning, and review signals flow into the desk light](docs/images/readme-header-signals.png)
+
 ## Notifications
 
 One-shot named flashes for external tools. No slots, no dedupe — it fires
@@ -374,6 +382,8 @@ to start on battery, so an undocked laptop still keeps the schedule. See
 `startup enable` is the older Startup-folder mechanism; it launches the full
 calendar watcher instead of just the chime loop, so use it if you want
 calendar colours without a login task.
+
+![Calendar and config section header: meetings, rules, and presets become ambient light](docs/images/readme-header-automation.png)
 
 ## Calendar
 
