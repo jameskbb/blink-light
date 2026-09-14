@@ -58,7 +58,12 @@ class AlarmFailureTests(unittest.TestCase):
         )
         self.config = default_config()
         self.config["settings"]["quiet_hours"]["enabled"] = False
-        # Both due in the same wake, the warning first.
+        # The standup pair only, both due in the same wake, the warning first.
+        # Retiming every alarm would sweep in whatever else ships by default,
+        # and this is about two alarms in one wake, not about how many there are.
+        self.config["alarms"] = [
+            alarm for alarm in self.config["alarms"] if alarm["name"].startswith("standup")
+        ]
         for alarm in self.config["alarms"]:
             alarm["at"] = "08:13"
         self.now = datetime(2026, 4, 2, 8, 13, 2, tzinfo=timezone.utc)

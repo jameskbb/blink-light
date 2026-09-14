@@ -19,6 +19,16 @@
       "enabled": true,
       "name": "standup_now",
       "respect_quiet_hours": true
+    },
+    {
+      "action": {
+        "scene": "rainbow_swirl"
+      },
+      "at": "17:15",
+      "catch_up_window_seconds": 300,
+      "enabled": true,
+      "name": "rainbow_encore",
+      "respect_quiet_hours": false
     }
   ],
   "calendar": {

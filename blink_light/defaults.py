@@ -346,6 +346,19 @@ BUILTIN_ALARMS = [
         "catch_up_window_seconds": 120,
         "respect_quiet_hours": True,
     },
+    # A second run of the 17:00 rainbow, for the evenings you were heads-down
+    # and worked straight through the first one. It is an alarm rather than a
+    # second `show` block because that is what `alarms` is for: another
+    # scheduled moment costs a config entry, not a code change. Opts out of
+    # quiet hours for the same reason the show does - 17:15 is inside them.
+    {
+        "name": "rainbow_encore",
+        "at": "17:15",
+        "action": {"scene": "rainbow_swirl"},
+        "enabled": True,
+        "catch_up_window_seconds": 300,
+        "respect_quiet_hours": False,
+    },
 ]
 
 BUILTIN_SHOW = {

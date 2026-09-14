@@ -71,6 +71,7 @@ Everything a fresh install does, in one place. Values are the built-in defaults 
 | **08:15** daily | Standup now — 6 faster flashes | 🟡 `#FFD700` gold | 1.44s | `alarm test standup_now` |
 | **:00** every hour | One white breath | ⚪ `#FFFFFF` | 0.8s | `chime test` |
 | **17:00** daily | Rainbow swirl across both LEDs | 🌈 28 hues | 9.92s | `show test` |
+| **17:15** daily | The same rainbow again, for when you worked through the first one | 🌈 28 hues from `#730000` | 9.92s | `alarm test rainbow_encore` |
 
 ### When something happens
 
@@ -106,10 +107,12 @@ default) moves the light.
 silent. Each effect can opt out with `respect_quiet_hours: false`, and the
 window itself is `settings.quiet_hours`.
 
-The daily show is the one that opts out. It fires at exactly 17:00 and the
+The two rainbows are what opt out. The show fires at exactly 17:00 and the
 window is inclusive of its start, so respecting quiet hours would retire the
 rainbow permanently; instead it still plays, as the last thing the light does
-before going dark.
+before going dark. The `rainbow_encore` alarm at 17:15 opts out for the same
+reason — it is a second chance to catch the first one, so it has to reach into
+the quiet window to be worth anything.
 
 Because 08:13 and 08:15 sit outside the window, the standup alerts are
 unaffected.
@@ -204,7 +207,7 @@ blink-light.bat alarm run <name>
 calls. Each alarm dedupes on its own key, so the 08:13 and 08:15 pair never
 swallow each other.
 
-Alarms live in a top-level `alarms` list, so adding a third is a config entry,
+Alarms live in a top-level `alarms` list, so adding another is a config entry,
 not a code change:
 
 ```json
@@ -231,8 +234,8 @@ not a code change:
 | `respect_quiet_hours` | no | Default `true`. |
 
 Setting `alarms` in your config **replaces** the defaults rather than merging,
-so `"alarms": []` disables both shipped ones. Add `"days"` to either default
-to skip weekends.
+so `"alarms": []` disables all three shipped ones. Add `"days"` to the standup
+pair to skip weekends.
 
 ![Notifications and GitHub section header: completion, warning, and review signals flow into a blink(1)](docs/images/readme-header-signals.png)
 

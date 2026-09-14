@@ -25,6 +25,7 @@ Nothing here is required. Every time and colour below is a setting, and the
 | Someone @mentions me on a pull request | A slow dim violet swell with a flicker, twice | They need an answer |
 | Someone reviews my pull request | A two-step dim violet climb, twice | Read the feedback |
 | **17:00** | Rainbow swirl, then dark | End of the working day |
+| **17:15** | The rainbow again | A second chance at it on the evenings I work straight through 17:00 |
 | **17:00 – 07:00** | Off and silent | I'm out of office, so nothing flashes at an empty desk |
 
 The calendar rows come from the watcher (`watch start`). Everything else runs

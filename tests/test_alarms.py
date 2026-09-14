@@ -53,7 +53,7 @@ class StandupAlarmTests(unittest.TestCase):
 
     def test_both_standup_alarms_exist(self) -> None:
         names = [alarm["name"] for alarm in self.config["alarms"]]
-        self.assertEqual(names, ["standup_warning", "standup_now"])
+        self.assertEqual(names[:2], ["standup_warning", "standup_now"])
 
     def test_they_are_at_0813_and_0815(self) -> None:
         self.assertEqual(find_alarm(self.config, "standup_warning")["at"], "08:13")
@@ -87,6 +87,51 @@ class StandupAlarmTests(unittest.TestCase):
         with self.assertRaises(ValueError) as caught:
             find_alarm(self.config, "nope")
         self.assertIn("standup_now", str(caught.exception))
+
+
+class RainbowEncoreTests(unittest.TestCase):
+    """The 17:00 show's second run, for an evening worked straight through."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        root = Path(self.tempdir.name)
+        self.paths = build_paths(
+            config_path=root / "blink-light.json",
+            project_root=root,
+            runtime_dir=root / "runtime",
+            startup_dir=root / "startup",
+        )
+        self.config = default_config()
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_the_encore_is_fifteen_minutes_after_the_show(self) -> None:
+        self.assertEqual(self.config["show"]["at"], "17:00")
+        self.assertEqual(find_alarm(self.config, "rainbow_encore")["at"], "17:15")
+
+    def test_the_encore_plays_the_shows_own_scene(self) -> None:
+        """The same animation, not a lookalike - one scene, two slots."""
+        encore = find_alarm(self.config, "rainbow_encore")
+        self.assertEqual(encore["action"], {"scene": self.config["show"]["scene"]})
+
+    def test_it_plays_even_though_quiet_hours_have_opened(self) -> None:
+        """17:15 is inside the quiet window; respecting it would retire the encore."""
+        self.assertTrue(self.config["settings"]["quiet_hours"]["enabled"])
+        due, reason, _ = should_fire(
+            self.config, self.paths, find_alarm(self.config, "rainbow_encore"), at(17, 15, 2)
+        )
+        self.assertTrue(due, reason)
+
+    def test_the_show_and_the_encore_do_not_swallow_each_other(self) -> None:
+        """Separate state files, so firing at 17:00 leaves 17:15 still due."""
+        results = fire_due_alarms(self.config, self.paths, controller_cls=FakeController, now=at(17, 15, 2))
+        self.assertEqual([result["alarm"] for result in results], ["rainbow_encore"])
+
+    def test_the_encore_still_fires_once_a_day(self) -> None:
+        fire_due_alarms(self.config, self.paths, controller_cls=FakeController, now=at(17, 15, 2))
+        again = fire_due_alarms(self.config, self.paths, controller_cls=FakeController, now=at(17, 16))
+        self.assertEqual(again, [])
 
 
 class AlarmFiringTests(unittest.TestCase):
@@ -242,9 +287,14 @@ class AlarmScheduleTests(unittest.TestCase):
     def test_after_the_first_it_points_at_the_second(self) -> None:
         self.assertEqual(seconds_until_next_alarm(self.config, at(8, 14, 0)), 60)
 
-    def test_after_both_it_wraps_to_tomorrow(self) -> None:
+    def test_the_encore_is_the_next_one_after_standup(self) -> None:
+        # 09:00 -> 17:15 the same evening, not 08:13 tomorrow.
         remaining = seconds_until_next_alarm(self.config, at(9, 0, 0))
-        self.assertAlmostEqual(remaining, 23 * 3600 + 13 * 60, delta=1)
+        self.assertAlmostEqual(remaining, 8 * 3600 + 15 * 60, delta=1)
+
+    def test_after_them_all_it_wraps_to_tomorrow(self) -> None:
+        remaining = seconds_until_next_alarm(self.config, at(18, 0, 0))
+        self.assertAlmostEqual(remaining, 14 * 3600 + 13 * 60, delta=1)
 
     def test_no_alarms_means_none(self) -> None:
         self.config["alarms"] = []
@@ -277,7 +327,10 @@ class AlarmStatusTests(unittest.TestCase):
 
     def test_status_lists_every_alarm(self) -> None:
         payload = alarm_status(self.config, self.paths, at(8, 0))
-        self.assertEqual([entry["name"] for entry in payload["alarms"]], ["standup_warning", "standup_now"])
+        self.assertEqual(
+            [entry["name"] for entry in payload["alarms"]],
+            ["standup_warning", "standup_now", "rainbow_encore"],
+        )
         self.assertEqual(payload["seconds_until_next"], 13 * 60)
 
     def test_status_shows_the_next_slot(self) -> None:
