@@ -7,8 +7,8 @@ How blink-light decides what the light should do, and what it costs to add more.
 **Both, and they are independent.**
 
 There is an always-running loop *and* a stateless hourly trigger. They do the same
-job by different means and cannot double-fire, because both consult the same
-slot-keyed state file before acting.
+job by different means and cannot double-fire, because both *claim* the same
+slot-keyed state file before acting — see [Claiming a slot](#claiming-a-slot).
 
 The loop does **not** fire on minute change. It sleeps until the next scheduled
 moment, waking at least once a minute to re-check its arithmetic.
@@ -69,6 +69,30 @@ Three consequences worth internalising:
 
 The 60s cap exists so that a laptop resuming from sleep or a DST shift is noticed
 within a minute rather than at the end of a 55-minute sleep.
+
+### Claiming a slot
+
+Reading the state file is not enough on its own. Two drivers that wake on the
+same second both read an unfired slot, both decide it is theirs, and their
+pattern writes interleave on one USB device — which is how a chime once flashed
+and then left the light stuck on.
+
+So a slot is *claimed*, not just checked. Under `slot.lock` (in the runtime
+dir), a driver re-reads the state file, writes its own entry, and releases;
+only then does it touch the light. The loser of the race finds `already-fired`
+and does nothing.
+
+Three properties keep the lock from becoming its own outage
+(`blink_light/slot_lock.py`):
+
+- It is an OS lock on an open handle, so a killed loop leaves nothing stale.
+- Acquisition is non-blocking behind a 2s deadline; a driver that misses it
+  stands down (`claimed-elsewhere`) rather than queueing behind the holder.
+- It is held across the claim only, never across the play — the daily show
+  holds the device for a minute and the lock for milliseconds.
+
+A claim whose effect never reached the light is handed back, so an unplugged
+blink(1) is still retried for the rest of its catch-up window.
 
 ### GitHub polling
 

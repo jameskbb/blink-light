@@ -21,6 +21,7 @@ from .device import BlinkDeviceController
 from .paths import AppPaths, ensure_runtime_dirs
 from .rules import is_between_times
 from .show import current_slot, next_slot
+from .slot_lock import slot_lock
 from .state import read_json, write_json
 
 # Monday is 0, matching datetime.weekday().
@@ -81,15 +82,39 @@ def read_state(paths: AppPaths) -> dict[str, Any]:
 
 
 def record_fire(paths: AppPaths, name: str, slot: datetime, now: datetime, source: str) -> dict[str, Any]:
+    """Write one alarm's dedupe entry.
+
+    Every alarm shares one state file, so this is a read-modify-write and has
+    to happen under the claim lock or a second alarm recorded at the same
+    moment would drop this one's entry. ``slot_lock`` is re-entrant within a
+    thread, so callers that already hold it pay nothing here.
+    """
     ensure_runtime_dirs(paths)
-    state = read_state(paths)
-    state[name] = {
-        "last_slot": slot.isoformat(),
-        "last_fired_at": now.isoformat(),
-        "source": source,
-    }
-    write_json(paths.alarm_state_path, state)
+    with slot_lock(paths.slot_lock_path):
+        state = read_state(paths)
+        state[name] = {
+            "last_slot": slot.isoformat(),
+            "last_fired_at": now.isoformat(),
+            "source": source,
+        }
+        write_json(paths.alarm_state_path, state)
     return state[name]
+
+
+def release_claim(paths: AppPaths, name: str, previous: dict[str, Any] | None) -> None:
+    """Undo a claim whose action never reached the light.
+
+    Without this an unplugged blink(1) would eat the alarm: the entry says
+    fired, so the catch-up window that exists to land it once the light is back
+    would skip it.
+    """
+    with slot_lock(paths.slot_lock_path):
+        state = read_state(paths)
+        if previous is None:
+            state.pop(name, None)
+        else:
+            state[name] = previous
+        write_json(paths.alarm_state_path, state)
 
 
 def should_fire(
@@ -193,9 +218,16 @@ def fire_due_alarms(
     current = now or _now()
     results = []
     for alarm in alarm_list(config):
-        due, _reason, slot = should_fire(config, paths, alarm, current)
-        if not due:
-            continue
+        # Claim first, play second: two drivers waking on the same alarm must
+        # not both decide it is theirs and write to the light together.
+        with slot_lock(paths.slot_lock_path) as acquired:
+            if not acquired:
+                continue
+            due, _reason, slot = should_fire(config, paths, alarm, current)
+            if not due:
+                continue
+            previous = read_state(paths).get(alarm["name"])
+            state = record_fire(paths, alarm["name"], slot, current, source)
         try:
             result = fire_alarm(
                 config,
@@ -206,12 +238,20 @@ def fire_due_alarms(
                 now=current,
                 slot=slot,
                 source=source,
+                record=False,
             )
         except Exception as error:
+            release_claim(paths, alarm["name"], previous)
             if on_error is None:
                 raise
             on_error(alarm, error)
             continue
+        except BaseException:
+            # Ctrl+C mid-alarm is not a fire either; hand the slot back before
+            # the interrupt leaves.
+            release_claim(paths, alarm["name"], previous)
+            raise
+        result["state"] = state
         results.append(result)
     return results
 

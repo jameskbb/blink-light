@@ -14,6 +14,7 @@ from typing import Any
 from .device import BlinkDeviceController
 from .paths import AppPaths, ensure_runtime_dirs
 from .rules import is_between_times
+from .slot_lock import slot_lock
 from .state import read_json, write_json
 
 
@@ -140,20 +141,39 @@ def maybe_fire_show(
     now: datetime | None = None,
     source: str = "scheduler",
 ) -> dict[str, Any]:
-    """Fire the show only if today's slot is due and unfired."""
+    """Fire the show only if today's slot is due and unfired.
+
+    Claimed under the shared lock before the scene starts, for the reason the
+    chime is: the show runs for a minute, and a second driver starting it on
+    top of the first is how the light ends up stuck mid-scene.
+    """
     current = now or _now()
-    due, reason, slot = should_fire(config, paths, current)
-    if not due:
-        return {"fired": False, "reason": reason, "slot": slot.isoformat()}
-    result = fire_show(
-        config,
-        paths,
-        controller_cls=controller_cls,
-        controller=controller,
-        now=current,
-        slot=slot,
-        source=source,
-    )
+    with slot_lock(paths.slot_lock_path) as acquired:
+        if not acquired:
+            slot = current_slot(current, show_time(config))
+            return {"fired": False, "reason": "claimed-elsewhere", "slot": slot.isoformat()}
+        due, reason, slot = should_fire(config, paths, current)
+        if not due:
+            return {"fired": False, "reason": reason, "slot": slot.isoformat()}
+        previous = read_show_state(paths)
+        state = record_fire(paths, slot, current, source)
+
+    try:
+        result = fire_show(
+            config,
+            paths,
+            controller_cls=controller_cls,
+            controller=controller,
+            now=current,
+            slot=slot,
+            source=source,
+            record=False,
+        )
+    except BaseException:
+        with slot_lock(paths.slot_lock_path):
+            write_json(paths.show_state_path, previous)
+        raise
+    result["state"] = state
     result["reason"] = reason
     return result
 

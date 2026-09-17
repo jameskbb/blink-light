@@ -23,6 +23,7 @@ class AppPaths:
     chime_stop_path: Path
     show_state_path: Path
     alarm_state_path: Path
+    slot_lock_path: Path
     override_path: Path
     timer_path: Path
     watcher_pid_path: Path
@@ -74,6 +75,10 @@ def build_paths(
         chime_stop_path=runtime / "chime.stop",
         show_state_path=runtime / "show-state.json",
         alarm_state_path=runtime / "alarm-state.json",
+        # Shared by every effect: one lock is enough because it is only ever
+        # held for a claim, and it keeps two effects racing at the same second
+        # from reaching the device together.
+        slot_lock_path=runtime / "slot.lock",
         override_path=runtime / "override.json",
         timer_path=runtime / "timer.json",
         watcher_pid_path=runtime / "watcher.pid",

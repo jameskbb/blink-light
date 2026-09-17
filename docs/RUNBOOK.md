@@ -293,11 +293,18 @@ doing its job:
 15:01:20 ERROR [chime] Refusing to start: loop already running with PID 23820
 ```
 
-### Duplicate pulses
+### Duplicate pulses, or a light left on after an effect
 
-Should be impossible; all drivers share the slot-keyed state file. If you do see
-doubles, check whether two *repo checkouts* are installed — they would have
-different `project_root` paths but write to the same `%LOCALAPPDATA%\BlinkLight`.
+Should be impossible; every driver claims the slot under `slot.lock` before it
+touches the device, so the loser of a race finds the slot already fired. If you
+do see doubles, check whether two *repo checkouts* are installed — they would
+have different `project_root` paths but write to the same
+`%LOCALAPPDATA%\BlinkLight`.
+
+A light stuck on after a chime is the same fault seen from the other side: two
+processes writing pattern lines at once can leave the blink(1) holding a colour.
+`light off` clears it. Before the claim existed this happened when the loop ran
+a few seconds late and the hourly task started its own pulse on top.
 
 ### "Two python.exe processes" is normal
 

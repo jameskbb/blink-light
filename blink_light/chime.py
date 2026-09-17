@@ -24,6 +24,7 @@ from .device import BlinkDeviceController, DeviceError
 from .log_file import close_log, open_log
 from .paths import AppPaths, ensure_runtime_dirs
 from .rules import is_between_times
+from .slot_lock import slot_lock
 from .state import is_process_running, read_json, remove_file, write_json
 
 TASK_NAME = "BlinkLight Hourly Chime"
@@ -189,20 +190,40 @@ def maybe_fire_chime(
     now: datetime | None = None,
     source: str = "watcher",
 ) -> dict[str, Any]:
-    """Fire the chime only if this hour's slot is due and unfired."""
+    """Fire the chime only if this hour's slot is due and unfired.
+
+    The slot is claimed under the shared lock before the pulse plays, so two
+    drivers that wake on the same hour cannot both conclude they are the one to
+    fire it. A claim whose pulse never reached the light is handed back: an
+    unplugged blink(1) must still be retried through the catch-up window.
+    """
     current = now or _now()
-    due, reason, slot = should_fire(config, paths, current)
-    if not due:
-        return {"fired": False, "reason": reason, "slot": slot.isoformat()}
-    result = fire_chime(
-        config,
-        paths,
-        controller_cls=controller_cls,
-        controller=controller,
-        now=current,
-        slot=slot,
-        source=source,
-    )
+    with slot_lock(paths.slot_lock_path) as acquired:
+        if not acquired:
+            slot = current_slot(current, chime_minute(config))
+            return {"fired": False, "reason": "claimed-elsewhere", "slot": slot.isoformat()}
+        due, reason, slot = should_fire(config, paths, current)
+        if not due:
+            return {"fired": False, "reason": reason, "slot": slot.isoformat()}
+        previous = read_chime_state(paths)
+        state = record_fire(paths, slot, current, source)
+
+    try:
+        result = fire_chime(
+            config,
+            paths,
+            controller_cls=controller_cls,
+            controller=controller,
+            now=current,
+            slot=slot,
+            source=source,
+            record=False,
+        )
+    except BaseException:
+        with slot_lock(paths.slot_lock_path):
+            write_json(paths.chime_state_path, previous)
+        raise
+    result["state"] = state
     result["reason"] = reason
     return result
 
