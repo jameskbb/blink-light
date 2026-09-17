@@ -9,6 +9,14 @@ RAINBOW_SWIRL_STEPS = 28
 RAINBOW_SWIRL_STEP_SECONDS = 0.34
 RAINBOW_SWIRL_FADE_OUT_SECONDS = 0.4
 
+# The same rotation compressed to notification length. A notification is an
+# interruption that has to be over before the next one arrives, and every other
+# one on the light runs 1-2.6s; ten seconds of rainbow per event would hold the
+# light through whatever came next.
+RAINBOW_SWEEP_STEPS = 12
+RAINBOW_SWEEP_STEP_SECONDS = 0.18
+RAINBOW_SWEEP_FADE_OUT_SECONDS = 0.3
+
 
 def _hsv_hex(hue: float, value: float) -> str:
     red, green, blue = colorsys.hsv_to_rgb(hue % 1.0, 1.0, max(0.0, min(1.0, value)))
@@ -54,18 +62,27 @@ PR_DIM_COLOR = scale_brightness(PR_VIOLET, NOTIFY_BRIGHTNESS * 0.4)
 STANDUP_COLOR = "#FFD700"
 
 
-def rainbow_swirl_scene() -> dict:
-    """A slow two-LED hue rotation that swells and settles. Under 10 seconds.
+def rainbow_scene(
+    step_count: int = RAINBOW_SWIRL_STEPS,
+    step_seconds: float = RAINBOW_SWIRL_STEP_SECONDS,
+    fade_out_seconds: float = RAINBOW_SWIRL_FADE_OUT_SECONDS,
+) -> dict:
+    """A two-LED hue rotation that swells and settles.
 
     Built rather than hand-written so the timing stays provably inside the cap.
     Every step is a *fade* to the next color, and the two LEDs are held half a
     turn apart in hue, so the light reads as a rotating gradient rather than a
     strobe. Brightness never drops to zero mid-show - the envelope bottoms out
     at 45% - which is what keeps it pretty instead of blinky.
+
+    The step count and duration are arguments because the same rotation serves
+    two lengths: the daily show, and a notification-length sweep. Compressing
+    it rather than writing a second scene keeps one rainbow on the light, so a
+    short one still reads as "the rainbow, briefly".
     """
     steps = []
-    for index in range(RAINBOW_SWIRL_STEPS):
-        progress = index / (RAINBOW_SWIRL_STEPS - 1)
+    for index in range(step_count):
+        progress = index / (step_count - 1)
         led = 1 if index % 2 == 0 else 2
         # Each LED advances a full turn over the show; the odd LED trails by
         # half a rotation so the pair always shows complementary colors.
@@ -74,12 +91,26 @@ def rainbow_swirl_scene() -> dict:
         steps.append(
             {
                 "color": _hsv_hex(hue, value),
-                "seconds": RAINBOW_SWIRL_STEP_SECONDS,
+                "seconds": step_seconds,
                 "led": led,
             }
         )
-    steps.append({"color": "#000000", "seconds": RAINBOW_SWIRL_FADE_OUT_SECONDS, "led": 0})
+    steps.append({"color": "#000000", "seconds": fade_out_seconds, "led": 0})
     return {"loop": False, "repeat": 1, "steps": steps}
+
+
+def rainbow_swirl_scene() -> dict:
+    """The daily show's rainbow: a slow full rotation, under 10 seconds."""
+    return rainbow_scene()
+
+
+def rainbow_sweep_scene() -> dict:
+    """The same rotation at notification length, around 2.5 seconds."""
+    return rainbow_scene(
+        RAINBOW_SWEEP_STEPS,
+        RAINBOW_SWEEP_STEP_SECONDS,
+        RAINBOW_SWEEP_FADE_OUT_SECONDS,
+    )
 
 
 def scene_duration_seconds(scene: dict) -> float:
@@ -101,6 +132,10 @@ BUILTIN_PRESETS = {
 
 BUILTIN_SCENES = {
     "rainbow_swirl": rainbow_swirl_scene(),
+    # Full brightness, unlike the dimmed notification scenes: a queue that just
+    # grew is meant to turn your head, and dimming a rainbow muddies the hues
+    # that make it recognisable in the first place.
+    "triage_request_scene": rainbow_sweep_scene(),
     # Paired thumps with a rest distinguish CI from three even agent breaths.
     "ci_failed_scene": {
         "loop": False,
@@ -318,6 +353,11 @@ BUILTIN_NOTIFY = {
     "pr_review_requested": {"scene": "pr_review_requested_scene"},
     "pr_mentioned": {"scene": "pr_mentioned_scene"},
     "pr_review_received": {"scene": "pr_review_received_scene"},
+    # For a queue an assistant or a bot feeds: "something new is waiting for
+    # you". A rainbow because it belongs to none of the existing bands - not a
+    # meeting, not a failure, not a pull request - and there is no mistaking it
+    # for one of them at a glance.
+    "triage_request": {"scene": "triage_request_scene"},
 }
 
 BUILTIN_GITHUB = {

@@ -127,6 +127,48 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["watch"]["pid"], 1234)
         self.assertEqual(error, "")
 
+    def _run_at(self, argv, hour: int) -> tuple[int, str]:
+        out = io.StringIO()
+        exit_code = main(
+            argv,
+            paths=self.paths,
+            controller_cls=FakeController,
+            snapshot_factory=lambda now=None: SystemSnapshot(None, set(), None, None),
+            now_factory=lambda: datetime(2026, 4, 2, hour, 0, tzinfo=timezone.utc),
+            out=out,
+            err=io.StringIO(),
+        )
+        return exit_code, out.getvalue()
+
+    def test_a_notification_fires_at_any_hour_by_default(self) -> None:
+        """Quiet hours are opt-in here: most events mean "this just happened"."""
+        exit_code, output = self._run_at(["notify", "run", "agent_done"], hour=23)
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(json.loads(output)["notified"])
+        self.assertEqual(len(FakeController.applied_actions), 1)
+
+    def test_a_notification_can_opt_into_quiet_hours(self) -> None:
+        """For a queue a bot fills overnight, flashing an empty desk is noise."""
+        exit_code, output = self._run_at(
+            ["notify", "run", "triage_request", "--respect-quiet-hours"], hour=23
+        )
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(output)
+        self.assertFalse(payload["notified"])
+        self.assertEqual(payload["reason"], "quiet-hours")
+        self.assertEqual(FakeController.applied_actions, [])
+
+    def test_opting_into_quiet_hours_still_fires_during_the_day(self) -> None:
+        exit_code, output = self._run_at(
+            ["notify", "run", "triage_request", "--respect-quiet-hours"], hour=12
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(json.loads(output)["notified"])
+        self.assertEqual(len(FakeController.applied_actions), 1)
+
     def test_override_set_and_clear(self) -> None:
         exit_code, _, _ = self._run(["override", "set", "--preset", "busy", "--expires-in", "30m"])
         self.assertEqual(exit_code, 0)

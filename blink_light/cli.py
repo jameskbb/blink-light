@@ -38,6 +38,7 @@ from .github import GitHubPoller, github_status
 from .show import fire_show, maybe_fire_show, show_status
 from .device import BlinkDeviceController, DeviceError
 from .paths import AppPaths, build_paths, ensure_runtime_dirs
+from .rules import is_between_times
 from .startup import disable_startup, enable_startup, startup_status
 from .state import read_json, remove_file, write_json
 from .timers import (
@@ -450,6 +451,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--quiet-missing",
         action="store_true",
         help="Exit 0 when the event is unknown. For integrations that must not fail loudly.",
+    )
+    notify_run.add_argument(
+        "--respect-quiet-hours",
+        action="store_true",
+        help="Skip the flash inside settings.quiet_hours. For queues that fill overnight.",
     )
 
     show_parser = subparsers.add_parser("show", help="Daily light show (rainbow swirl at 17:00).")
@@ -866,6 +872,18 @@ def main(
                 )
                 return 0
             if args.notify_command == "run":
+                quiet_hours = config["settings"]["quiet_hours"]
+                if (
+                    args.respect_quiet_hours
+                    and quiet_hours.get("enabled")
+                    and is_between_times(now_factory(), quiet_hours["start"], quiet_hours["end"])
+                ):
+                    # Opt-in, because a notification means "this just happened"
+                    # and most callers want it regardless of the hour. A queue
+                    # a bot fills overnight is the case that does not: without
+                    # this it flashes at an empty desk until morning.
+                    _print_json(stream, {"notified": False, "event": args.event, "reason": "quiet-hours"})
+                    return 0
                 try:
                     payload = fire_notify(config, args.event, controller_cls=controller_cls)
                 except NotifyError:

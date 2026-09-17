@@ -51,6 +51,7 @@ For full first-time setup — installing the scheduled tasks, verifying the chim
 | [Runbook](docs/RUNBOOK.md) | set up the scheduled tasks, check they fire, troubleshoot, or remove everything |
 | [Architecture](docs/ARCHITECTURE.md) | understand how the scheduling works, or add a feature |
 | [Effects](docs/EFFECTS.md) | design your own flashes — with pasteable scenes |
+| [Notify](docs/NOTIFY.md) | flash the light from your own script, bot, or assistant |
 | [Herdr](docs/HERDR.md) | make the light react when an AI coding agent finishes or gets blocked |
 | [My setup](docs/MY-SETUP.md) | see how the author runs it day to day |
 
@@ -83,6 +84,7 @@ Everything a fresh install does, in one place. Values are the built-in defaults 
 | A pull request review is requested from you (opt-in) | A pulse handed from the top LED to the bottom, twice | 🟣 `#442C72` — dim violet | 2.24s | `notify run pr_review_requested` |
 | You're @mentioned on a pull request (opt-in) | A slow swell with a flicker at its peak, twice | 🟣 `#442C72` — dim violet | 2.56s | `notify run pr_mentioned` |
 | Someone reviews your pull request (opt-in) | A two-step climb, twice | 🟣 `#1B112E` — dimmer violet | 1.98s | `notify run pr_review_received` |
+| A new request lands in a queue you watch | A rainbow sweep across both LEDs | 🌈 12 hues from `#730000` | 2.46s | `notify run triage_request` |
 
 ### The resting colour (watcher only, opt-in)
 
@@ -284,6 +286,11 @@ event and the config decides how it looks:
 
 Add `--quiet-missing` for callers that must not fail when an event is
 undefined.
+
+There is **no server and no port** — the CLI verb is the whole interface. A
+tool triggers a flash by running a command, which means no daemon to keep
+alive, nothing listening on the machine, and no auth to get wrong. Calling it
+from your own tool is [three lines](docs/NOTIFY.md).
 
 **Shipped integration:** [Herdr](docs/HERDR.md) — flashes when an AI agent
 finishes or gets blocked.

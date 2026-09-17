@@ -34,7 +34,15 @@ class NotifyTests(unittest.TestCase):
     def test_default_events_are_present(self) -> None:
         self.assertEqual(
             list_events(self.config),
-            ["agent_blocked", "agent_done", "ci_failed", "pr_mentioned", "pr_review_received", "pr_review_requested"],
+            [
+                "agent_blocked",
+                "agent_done",
+                "ci_failed",
+                "pr_mentioned",
+                "pr_review_received",
+                "pr_review_requested",
+                "triage_request",
+            ],
         )
 
     def test_events_resolve_to_scenes(self) -> None:
@@ -83,20 +91,44 @@ class NotifyTests(unittest.TestCase):
 
 
 class NotifySceneTests(unittest.TestCase):
+    """Every scene a notify event can reach, not a hand-listed two.
+
+    Listing names here meant a new event shipped untested by default. These
+    walk `notify` instead, so anything added is held to the same two rules:
+    it has to finish on its own, and it has to fit on the device.
+    """
+
+    def setUp(self) -> None:
+        self.config = default_config()
+        self.scenes = {
+            name: self.config["scenes"][resolve_event(self.config, name)["scene"]]
+            for name in list_events(self.config)
+            if "scene" in resolve_event(self.config, name)
+        }
+
     def test_notification_scenes_are_short_and_do_not_loop(self) -> None:
-        scenes = default_config()["scenes"]
-        for name in ("agent_done_scene", "agent_blocked_scene"):
-            with self.subTest(scene=name):
-                scene = scenes[name]
+        for name, scene in self.scenes.items():
+            with self.subTest(event=name):
                 # A looping notification would never hand the light back.
                 self.assertFalse(scene["loop"])
                 self.assertLess(scene_duration_seconds(scene), 3.0)
 
     def test_notification_scenes_fit_on_the_device(self) -> None:
-        scenes = default_config()["scenes"]
-        for name in ("agent_done_scene", "agent_blocked_scene"):
-            with self.subTest(scene=name):
-                self.assertLessEqual(len(scenes[name]["steps"]), 32)
+        for name, scene in self.scenes.items():
+            with self.subTest(event=name):
+                # Past 32 steps the scene is played from the host instead, a
+                # thread per flash and a USB write per step.
+                self.assertLessEqual(len(scene["steps"]), 32)
+
+    def test_the_triage_sweep_is_the_daily_rainbow_at_notification_length(self) -> None:
+        sweep = self.config["scenes"]["triage_request_scene"]
+        show = self.config["scenes"]["rainbow_swirl"]
+
+        self.assertLess(scene_duration_seconds(sweep), scene_duration_seconds(show) / 3)
+        # Same rotation, not a second rainbow: both start at the same hue and
+        # alternate LEDs the same way.
+        self.assertEqual(sweep["steps"][0]["color"], show["steps"][0]["color"])
+        self.assertEqual([step["led"] for step in sweep["steps"][:4]], [1, 2, 1, 2])
 
 
 class BrightnessTests(unittest.TestCase):

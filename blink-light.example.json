@@ -105,6 +105,9 @@
     },
     "pr_review_requested": {
       "scene": "pr_review_requested_scene"
+    },
+    "triage_request": {
+      "scene": "triage_request_scene"
     }
   },
   "presets": {
@@ -627,6 +630,77 @@
         {
           "color": "#000000",
           "seconds": 1.0
+        }
+      ]
+    },
+    "triage_request_scene": {
+      "loop": false,
+      "repeat": 1,
+      "steps": [
+        {
+          "color": "#730000",
+          "led": 1,
+          "seconds": 0.18
+        },
+        {
+          "color": "#00469A",
+          "led": 2,
+          "seconds": 0.18
+        },
+        {
+          "color": "#ADBF00",
+          "led": 1,
+          "seconds": 0.18
+        },
+        {
+          "color": "#8C00DD",
+          "led": 2,
+          "seconds": 0.18
+        },
+        {
+          "color": "#00F22C",
+          "led": 1,
+          "seconds": 0.18
+        },
+        {
+          "color": "#FE0045",
+          "led": 2,
+          "seconds": 0.18
+        },
+        {
+          "color": "#00B8FE",
+          "led": 1,
+          "seconds": 0.18
+        },
+        {
+          "color": "#F2C600",
+          "led": 2,
+          "seconds": 0.18
+        },
+        {
+          "color": "#5000DD",
+          "led": 1,
+          "seconds": 0.18
+        },
+        {
+          "color": "#11BF00",
+          "led": 2,
+          "seconds": 0.18
+        },
+        {
+          "color": "#9A0054",
+          "led": 1,
+          "seconds": 0.18
+        },
+        {
+          "color": "#007373",
+          "led": 2,
+          "seconds": 0.18
+        },
+        {
+          "color": "#000000",
+          "led": 0,
+          "seconds": 0.3
         }
       ]
     }
