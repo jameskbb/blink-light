@@ -51,7 +51,7 @@ For full first-time setup — installing the scheduled tasks, verifying the chim
 | [Runbook](docs/RUNBOOK.md) | set up the scheduled tasks, check they fire, troubleshoot, or remove everything |
 | [Architecture](docs/ARCHITECTURE.md) | understand how the scheduling works, or add a feature |
 | [Effects](docs/EFFECTS.md) | design your own flashes — with pasteable scenes |
-| [Notify](docs/NOTIFY.md) | flash the light from your own script, bot, or assistant |
+| [Integrating](docs/INSTRUCTIONS.md) | flash the light from your own script, bot, or agent — hand this page to it whole |
 | [Herdr](docs/HERDR.md) | make the light react when an AI coding agent finishes or gets blocked |
 | [My setup](docs/MY-SETUP.md) | see how the author runs it day to day |
 
@@ -290,7 +290,8 @@ undefined.
 There is **no server and no port** — the CLI verb is the whole interface. A
 tool triggers a flash by running a command, which means no daemon to keep
 alive, nothing listening on the machine, and no auth to get wrong. Calling it
-from your own tool is [three lines](docs/NOTIFY.md).
+from your own tool is [a few lines](docs/INSTRUCTIONS.md) — that page is written
+to be handed to an agent whole.
 
 **Shipped integration:** [Herdr](docs/HERDR.md) — flashes when an AI agent
 finishes or gets blocked.
