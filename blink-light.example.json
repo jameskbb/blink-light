@@ -41,7 +41,7 @@
     "busy_meeting_color": "#D50000",
     "enabled": true,
     "five_minute_warning": {
-      "color": "#FB8C00",
+      "color": "#FF00C8",
       "count": 4,
       "off_ms": 110,
       "on_ms": 130
@@ -55,7 +55,7 @@
     "poll_seconds": 30,
     "provider": "outlook",
     "ten_minute_warning": {
-      "color": "#FDD835",
+      "color": "#00E5FF",
       "count": 2,
       "off_ms": 180,
       "on_ms": 220

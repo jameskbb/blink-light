@@ -16,7 +16,7 @@ Nothing here is required. Every time and colour below is a setting, and the
 | **08:13** | 3 gold flashes | Standup in 2 minutes |
 | **08:15** | 6 faster gold flashes | Standup now |
 | **:00** every hour | One white breath | A quiet marker that another hour has gone |
-| 10 and 5 minutes before a Busy or Tentative meeting | Yellow, then orange blinks | Time to wrap up what I'm doing |
+| 10 and 5 minutes before a Busy or Tentative meeting | 2 slow cyan blinks, then 4 quick magenta ones | Time to wrap up what I'm doing |
 | During a Busy or Tentative meeting | Red | Visible to anyone walking up |
 | An AI agent finishes | 2 slow blue breaths | Come back and review |
 | An AI agent is blocked | 3 quicker dim-red breaths | It needs an answer from me |

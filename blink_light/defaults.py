@@ -423,10 +423,17 @@ BUILTIN_CALENDAR = {
     "available_color": "#00C853",
     "busy_meeting_color": "#D50000",
     # The two warnings differ in hue *and* rhythm, so which one just fired is
-    # readable from across the room without counting blinks: two slow yellow
-    # ones at ten minutes out, four quick orange ones at five.
-    "ten_minute_warning": {"color": "#FDD835", "on_ms": 220, "off_ms": 180, "count": 2},
-    "five_minute_warning": {"color": "#FB8C00", "on_ms": 130, "off_ms": 110, "count": 4},
+    # readable from across the room without counting blinks: two slow ones at
+    # ten minutes out, four quick ones at five.
+    #
+    # Cyan and magenta rather than the yellow and orange they used to be. Six
+    # different things were flashing in the red-to-yellow band - these two, both
+    # standup alarms, a failed CI run and a blocked agent - and at a glance they
+    # were one warm blink. These two are the only cyan and the only magenta on
+    # the light, which is what makes them readable. Keep them out of that band
+    # if you re-colour them.
+    "ten_minute_warning": {"color": "#00E5FF", "on_ms": 220, "off_ms": 180, "count": 2},
+    "five_minute_warning": {"color": "#FF00C8", "on_ms": 130, "off_ms": 110, "count": 4},
 }
 
 

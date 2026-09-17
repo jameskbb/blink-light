@@ -93,13 +93,30 @@ returns to; everything above plays on top of it.
 | --- | --- |
 | Nothing scheduled | 🟢 `#00C853` green |
 | In a Busy or Tentative meeting | 🔴 `#D50000` red |
-| Meeting in 10 minutes | 🟡 `#FDD835` — 2 slow blinks |
-| Meeting in 5 minutes | 🟠 `#FB8C00` — 4 quick blinks |
+| Meeting in 10 minutes | 🔵 `#00E5FF` cyan — 2 slow blinks |
+| Meeting in 5 minutes | 🟣 `#FF00C8` magenta — 4 quick blinks |
 | Idle 10+ minutes | 🔵 `#2962FF` blue |
 
 Meetings marked **Free**, **Out of Office** or **Working Elsewhere** are ignored
 entirely — no colour, no warning. Only `alert_statuses` (Tentative and Busy by
 default) moves the light.
+
+### Telling them apart
+
+One LED has to carry a dozen meanings, so the palette is grouped rather than
+picked per effect. Worth keeping if you re-colour anything:
+
+| Band | Means | Effects |
+| --- | --- | --- |
+| 🔵 cyan / 🟣 magenta flashes | A meeting is coming | 10 min, then 5 min |
+| 🔴 red steady | You are in the meeting | Busy or Tentative |
+| 🟡 gold / 🟠 orange / 🔴 dim red | Something wants you | Standup, failed CI, blocked agent |
+| 🟣 dim violet | Pull requests | Review requested, @mention, review received |
+| 🟢 green / 🔵 blue steady | Your own state | Free, idle |
+| ⚪ white | The hour | The chime |
+
+The meeting warnings were yellow and orange until five different flashes ended
+up in that warm band at once; cyan and magenta are used by nothing else.
 
 A watcher that dies takes these colours with it and nothing else changes, so
 the scheduler restarts one that has gone missing — see
