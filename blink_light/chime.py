@@ -281,7 +281,11 @@ def loop_status(paths: AppPaths) -> dict[str, Any]:
     if paths.chime_pid_path.exists():
         try:
             pid = int(paths.chime_pid_path.read_text(encoding="utf-8").strip())
-        except ValueError:
+        except (ValueError, OSError):
+            # A loop on its way out deletes this file while `chime stop` polls
+            # it, and Windows answers the read in flight with a sharing
+            # violation rather than a missing file. "No readable pid" is the
+            # same answer either way; raising here killed the stop mid-wait.
             pid = None
     running = is_process_running(pid)
     if not running and pid:

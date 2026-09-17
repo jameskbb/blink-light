@@ -179,6 +179,18 @@ class ChimeLoopLifecycleTests(unittest.TestCase):
         self.assertFalse(self.paths.chime_pid_path.exists())
         self.assertFalse(self.paths.chime_stop_path.exists())
 
+    def test_a_pid_file_that_cannot_be_read_reads_as_no_loop(self) -> None:
+        """`chime stop` polls this file while the exiting loop deletes it.
+
+        Windows answers a read caught in that moment with a sharing violation,
+        not a missing file, and the raise used to escape through `chime stop`
+        mid-wait. A directory in the file's place reproduces the unreadable
+        path without needing the race.
+        """
+        self.paths.chime_pid_path.mkdir(parents=True)
+
+        self.assertEqual(loop_status(self.paths), {"running": False, "pid": None})
+
     def test_a_stop_file_retires_the_loop(self) -> None:
         self.paths.runtime_dir.mkdir(parents=True, exist_ok=True)
         calls = {"n": 0}

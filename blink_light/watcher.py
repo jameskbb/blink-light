@@ -194,7 +194,11 @@ def watch_status(paths: AppPaths, now: datetime | None = None) -> dict[str, Any]
     if paths.watcher_pid_path.exists():
         try:
             pid = int(paths.watcher_pid_path.read_text(encoding="utf-8").strip())
-        except ValueError:
+        except (ValueError, OSError):
+            # Same race as the loop's: a watcher exiting deletes this while the
+            # supervisor reads it, and Windows reports that as a sharing
+            # violation. Unreadable means "no pid", not "crash the caller" -
+            # and here the caller is the thing that restarts the watcher.
             pid = None
     if pid is None:
         state_pid = state.get("pid")

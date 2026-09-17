@@ -82,6 +82,21 @@ class SupervisionTests(unittest.TestCase):
         self.assertEqual(result["action"], "running")
         self.assertEqual(starter.calls, 0)
 
+    def test_a_pid_file_that_cannot_be_read_does_not_stop_the_supervisor(self) -> None:
+        """A watcher exiting deletes this file while the supervisor reads it.
+
+        Windows reports that in-flight read as a sharing violation rather than
+        a missing file, and the raise would land in the one place that exists
+        to bring the watcher back. A directory stands in for the unreadable
+        file.
+        """
+        self.paths.watcher_pid_path.mkdir(parents=True)
+        starter = RecordingStarter()
+
+        result = self._supervisor(starter).check(now=at())
+
+        self.assertEqual(result["action"], "restarted")
+
     def test_a_watcher_stopped_on_purpose_stays_stopped(self) -> None:
         stop_watch(self.paths)
         starter = RecordingStarter()
