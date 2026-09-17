@@ -746,8 +746,12 @@ def main(
                 )
                 return 0
             if args.watch_command == "start":
-                _print_json(stream, start_background_watch(resolved_paths))
-                return 0
+                started = start_background_watch(resolved_paths)
+                _print_json(stream, started)
+                # A launcher that always exits 0 is how a watcher goes missing
+                # without anyone finding out: the logon script, a scheduled
+                # task, and anything else driving this need the failure.
+                return 0 if started["running"] else 1
             if args.watch_command == "stop":
                 _print_json(stream, stop_watch(resolved_paths))
                 return 0

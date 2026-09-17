@@ -101,6 +101,12 @@ Meetings marked **Free**, **Out of Office** or **Working Elsewhere** are ignored
 entirely — no colour, no warning. Only `alert_statuses` (Tentative and Busy by
 default) moves the light.
 
+A watcher that dies takes these colours with it and nothing else changes, so
+the scheduler restarts one that has gone missing — see
+[Supervising the watcher](docs/ARCHITECTURE.md#supervising-the-watcher).
+`watch status` reports `running`, `paused` and `heartbeat_age_seconds`, and
+`watch start` exits non-zero if the watcher does not come up.
+
 ### Quiet hours
 
 **17:00 – 07:00** by default the light is off, and the chime and alarms stay

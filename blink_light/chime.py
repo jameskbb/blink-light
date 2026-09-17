@@ -332,6 +332,7 @@ def run_chime_loop(
     sleep: Callable[[float], None] | None = None,
     max_iterations: int | None = None,
     stop_check: Callable[[], bool] | None = None,
+    supervisor=None,
 ) -> dict[str, Any]:
     """Foreground runner: sleep until each slot, chime, repeat.
 
@@ -345,6 +346,9 @@ def run_chime_loop(
     from .alarms import fire_due_alarms, seconds_until_next_alarm
     from .github import GitHubPoller
     from .show import maybe_fire_show, seconds_until_next_slot as show_seconds_until, show_time
+    # Imported here, not at module scope: the watcher imports this module for
+    # the chime, so the dependency only works in one direction at import time.
+    from .watcher import WatcherSupervisor
 
     sleep_fn = sleep or _time.sleep
     ensure_runtime_dirs(paths)
@@ -370,6 +374,7 @@ def run_chime_loop(
     iterations = 0
     stopped_by = None
     github = GitHubPoller(config, paths)
+    watcher = supervisor if supervisor is not None else WatcherSupervisor(config, paths, logger=LOGGER)
     # An undocked laptop is not a fault - the light is simply not there. Each
     # missed slot is retried once a minute through the catch-up window, so a
     # stack trace per attempt buried the real failures under five identical
@@ -460,6 +465,12 @@ def run_chime_loop(
                 )
             except Exception as error:
                 log_effect_failure("GitHub", error, current)
+            try:
+                # Last, and outside the effects: a watcher that will not start
+                # must not cost the schedule its wake.
+                watcher.check(now=current)
+            except Exception as error:
+                log_effect_failure("Watcher supervision", error, current)
 
             after = now_factory()
             candidates = [

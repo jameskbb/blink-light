@@ -293,6 +293,56 @@ doing its job:
 15:01:20 ERROR [chime] Refusing to start: loop already running with PID 23820
 ```
 
+### The watcher is not running (calendar colours stopped)
+
+The light still chimes, because the chime and the watcher are separate
+processes — so a watcher that died looks like nothing at all until you notice
+the light never turns red for a meeting.
+
+```bat
+blink-light.bat watch status
+```
+
+| Field | Means |
+|---|---|
+| `running` | A live PID, or a heartbeat written within the last 15s |
+| `paused` | Someone ran `watch stop`; supervision will not undo that |
+| `heartbeat_age_seconds` | Seconds since the last tick was written. Older than a minute on a `running` watcher means its ticks have stalled |
+
+To start it, from a script or by hand:
+
+```bat
+blink-light.bat watch start
+```
+
+It waits to see the watcher actually come up and **exits non-zero if it did
+not** — the JSON carries an `error` field pointing at the log. Nothing here
+reports success for a launch it did not confirm.
+
+**What restarts it on its own.** The scheduler loop checks every wake (≤60s)
+and restarts a watcher that has gone missing, logging:
+
+```
+09:14:58 INFO [watcher] Watcher was not running; restarted it (PID 24140)
+```
+
+That check runs only when `startup enable` has been done — supervision
+restarts the watcher you asked to autostart, not one nobody configured — and
+never when `paused` is set, so a deliberate `watch stop` stays stopped until
+the next `watch start`. A watcher that will not start is retried every 5
+minutes and logged once per outage, not once per attempt:
+
+```
+09:15:58 ERROR [watcher] Watcher is not running and would not start; retrying every 300s
+```
+
+Set `settings.supervise_watcher` to `false` in `blink-light.json` to turn the
+whole thing off.
+
+**If it keeps dying**, read the log first — the watcher logs why it stopped.
+An unplugged light is *not* one of the reasons; it keeps ticking and repaints
+when the light returns.
+
 ### Duplicate pulses, or a light left on after an effect
 
 Should be impossible; every driver claims the slot under `slot.lock` before it

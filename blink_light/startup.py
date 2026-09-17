@@ -14,10 +14,14 @@ def startup_status(paths: AppPaths) -> dict:
 def enable_startup(paths: AppPaths) -> dict:
     paths.startup_dir.mkdir(parents=True, exist_ok=True)
     launcher = paths.project_root / "blink-light.bat"
+    # The exit code is passed on rather than swallowed, so anything that runs
+    # this script other than the Startup folder - a task, a test, a shell - can
+    # tell a watcher that came up from one that did not.
     content = (
         "@echo off\r\n"
         f'cd /d "{paths.project_root}"\r\n'
         f'call "{launcher}" watch start\r\n'
+        "exit /b %errorlevel%\r\n"
     )
     write_text(paths.startup_script_path, content)
     return startup_status(paths)

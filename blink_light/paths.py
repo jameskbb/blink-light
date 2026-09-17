@@ -29,6 +29,7 @@ class AppPaths:
     watcher_pid_path: Path
     watcher_state_path: Path
     watcher_stop_path: Path
+    watcher_paused_path: Path
     log_path: Path
     startup_dir: Path
     startup_script_path: Path
@@ -84,6 +85,10 @@ def build_paths(
         watcher_pid_path=runtime / "watcher.pid",
         watcher_state_path=runtime / "watcher-state.json",
         watcher_stop_path=runtime / "watcher.stop",
+        # `watcher.stop` is a request the watcher consumes and deletes on its
+        # way out; this one outlives it, so the supervisor can tell "you asked
+        # for it to be off" from "it died".
+        watcher_paused_path=runtime / "watcher.paused",
         log_path=runtime / "blink-light.log",
         startup_dir=startup,
         startup_script_path=startup / STARTUP_SCRIPT_NAME,

@@ -169,6 +169,8 @@ def validate_config(payload: dict[str, Any]) -> None:
         raise ConfigError("'settings.watchdog_millis' must be a positive number.")
     if not isinstance(settings.get("stop_turns_light_off"), bool):
         raise ConfigError("'settings.stop_turns_light_off' must be a boolean.")
+    if not isinstance(settings.get("supervise_watcher"), bool):
+        raise ConfigError("'settings.supervise_watcher' must be a boolean.")
     _validate_action(settings.get("default_action"), "settings.default_action")
     quiet_hours = settings.get("quiet_hours")
     if not isinstance(quiet_hours, dict):

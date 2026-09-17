@@ -20,6 +20,7 @@ from .calendar_source import (
 from .log_file import close_log, open_log
 from .paths import AppPaths, ensure_runtime_dirs
 from .rules import first_matching_rule, is_between_times
+from .startup import startup_status
 from .state import is_process_running, read_json, remove_file, write_json
 from .system_state import collect_system_snapshot
 from .timers import TimerSnapshot, refresh_timer_state
@@ -166,7 +167,28 @@ def determine_action(
     }
 
 
-def watch_status(paths: AppPaths) -> dict[str, Any]:
+def heartbeat_age_seconds(state: dict[str, Any], now: datetime | None = None) -> float | None:
+    """How long since the watcher last wrote its state, or None if it never has.
+
+    A monitor wants this even when the process is up: a watcher whose ticks
+    have stalled is as blind as one that exited, and the pid alone cannot tell
+    you which you have.
+    """
+    updated_at = state.get("updated_at")
+    if not updated_at:
+        return None
+    try:
+        updated = datetime.fromisoformat(updated_at)
+    except ValueError:
+        return None
+    return round(((now or _now()) - updated).total_seconds(), 1)
+
+
+def watch_paused(paths: AppPaths) -> bool:
+    return paths.watcher_paused_path.exists()
+
+
+def watch_status(paths: AppPaths, now: datetime | None = None) -> dict[str, Any]:
     state = read_json(paths.watcher_state_path, {})
     pid = None
     if paths.watcher_pid_path.exists():
@@ -186,7 +208,13 @@ def watch_status(paths: AppPaths) -> dict[str, Any]:
             pid = heartbeat_pid
     if not running and pid:
         remove_file(paths.watcher_pid_path)
-    return {"running": running, "pid": pid if running else None, "state": state}
+    return {
+        "running": running,
+        "pid": pid if running else None,
+        "paused": watch_paused(paths),
+        "heartbeat_age_seconds": heartbeat_age_seconds(state, now),
+        "state": state,
+    }
 
 
 def apply_once(
@@ -228,6 +256,8 @@ def run_watch_loop(
     calendar_cache = CalendarCache(config, paths=paths)
     paths.watcher_pid_path.write_text(str(os.getpid()), encoding="utf-8")
     remove_file(paths.watcher_stop_path)
+    # However it was launched, a watcher that is running is not paused.
+    remove_file(paths.watcher_paused_path)
     LOGGER.info("Watcher started (PID %s)", os.getpid())
     last_signature = None
     stopped_by = None
@@ -373,7 +403,15 @@ def run_watch_loop(
 
 
 def start_background_watch(paths: AppPaths) -> dict[str, Any]:
+    """Launch the watcher detached, and wait to see it actually come up.
+
+    The return value is the answer to "is it running now?", never "the launch
+    was issued" - a detached process with its output discarded can die before
+    its first tick and say nothing. Callers should treat a false ``running``
+    as a failure; the CLI turns it into a non-zero exit.
+    """
     ensure_runtime_dirs(paths)
+    remove_file(paths.watcher_paused_path)
     status = watch_status(paths)
     if status["running"]:
         return status
@@ -415,7 +453,89 @@ def start_background_watch(paths: AppPaths) -> dict[str, Any]:
     return status
 
 
+class WatcherSupervisor:
+    """Restarts a watcher that went away without being asked to.
+
+    Lives in the scheduler loop because that is the only process already
+    running all day. The logon script was the sole way the watcher ever
+    started, so anything that killed it mid-session - an undock the device
+    layer could not survive, a crash, a kill - left the calendar dark until a
+    human noticed and logged back in.
+
+    Deliberately dumb: it does not diagnose, it re-runs the same start the CLI
+    runs, no more than once every ``retry_seconds`` so a watcher that cannot
+    start is not respawned every wake.
+
+    It acts only where the watcher was meant to be running in the first place:
+    the logon script installed (`startup enable`) and no pause marker from a
+    deliberate `watch stop`. Supervising a watcher nobody asked for would mean
+    a bare checkout that runs the scheduler starts spawning watchers.
+    """
+
+    def __init__(
+        self,
+        config: dict[str, Any],
+        paths: AppPaths,
+        starter: Callable[[AppPaths], dict[str, Any]] = start_background_watch,
+        retry_seconds: float = 300.0,
+        logger: logging.Logger | None = None,
+    ):
+        self.config = config
+        self.paths = paths
+        self.starter = starter
+        self.retry_seconds = retry_seconds
+        self.logger = logger or LOGGER
+        self._last_attempt: datetime | None = None
+        self._failing = False
+
+    def enabled(self) -> bool:
+        if not self.config["settings"].get("supervise_watcher", True):
+            return False
+        return startup_status(self.paths)["enabled"]
+
+    def check(self, now: datetime | None = None) -> dict[str, Any]:
+        current = now or _now()
+        if not self.enabled():
+            return {"action": "disabled"}
+        if watch_paused(self.paths):
+            return {"action": "paused"}
+        status = watch_status(self.paths, now=current)
+        if status["running"]:
+            if self._failing:
+                self.logger.info("Watcher is running again")
+                self._failing = False
+            self._last_attempt = None
+            return {"action": "running", "pid": status["pid"]}
+        if self._last_attempt is not None and (current - self._last_attempt).total_seconds() < self.retry_seconds:
+            return {"action": "waiting"}
+
+        self._last_attempt = current
+        started = self.starter(self.paths)
+        if started.get("running"):
+            self.logger.info("Watcher was not running; restarted it (PID %s)", started.get("pid"))
+            self._failing = False
+            self._last_attempt = None
+            return {"action": "restarted", "pid": started.get("pid")}
+        if not self._failing:
+            # Once, not once per retry: a watcher that cannot start usually
+            # cannot start for a while, and the reason is already in this log.
+            self._failing = True
+            self.logger.error(
+                "Watcher is not running and would not start; retrying every %ss",
+                int(self.retry_seconds),
+            )
+        return {"action": "failed", "error": started.get("error")}
+
+
 def stop_watch(paths: AppPaths, timeout_seconds: float = 8.0) -> dict[str, Any]:
+    """Ask the watcher to exit, and record that the silence is deliberate.
+
+    The pause marker outlives the watcher so the supervisor does not undo a
+    stop the moment it is made. `watch start` - including the one the logon
+    script runs - clears it.
+    """
+    ensure_runtime_dirs(paths)
+    paths.watcher_paused_path.write_text(_now().isoformat(), encoding="utf-8")
     status = watch_status(paths)
     if not status["running"]:
         remove_file(paths.watcher_stop_path)

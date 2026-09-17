@@ -275,6 +275,12 @@ BUILTIN_SETTINGS = {
     "tick_seconds": 5,
     "watchdog_millis": 8000,
     "stop_turns_light_off": True,
+    # The watcher was only ever started at logon, so one that died mid-session
+    # took the calendar colours with it until somebody noticed the light had
+    # gone plain - days, the first time it happened. The scheduler loop is
+    # already always on, so it is the thing that can notice. An explicit
+    # `watch stop` is still honoured; only an unplanned exit is restarted.
+    "supervise_watcher": True,
     "default_action": {"preset": "available"},
     # Out of office from 17:00, so the light goes dark rather than chiming and
     # showing calendar colours to an empty desk. The 17:00 show opts out above.

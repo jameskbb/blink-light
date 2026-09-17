@@ -25,6 +25,13 @@ The scheduler loop and the watcher are separate processes with separate jobs. Th
 watcher paints *ongoing state* (are you in a meeting?). The scheduler fires
 *moments* (it is 5pm).
 
+Separate processes means one can die without the other noticing, and the watcher
+used to start only at logon — so a watcher killed at 08:14 left the calendar
+colours off for days while the chimes carried on as though nothing were wrong.
+The scheduler loop is already awake every minute, so it is also the watcher's
+supervisor: each wake it restarts a watcher that has gone missing (see
+[Supervising the watcher](#supervising-the-watcher)).
+
 There is a third path with no process of its own: **notifications**. An external
 tool runs `notify run <event>`, the light flashes, the process exits. No slot, no
 dedupe, no daemon — see [Herdr](HERDR.md) for the shipped example. Three kinds of
@@ -93,6 +100,27 @@ Three properties keep the lock from becoming its own outage
 
 A claim whose effect never reached the light is handed back, so an unplugged
 blink(1) is still retried for the rest of its catch-up window.
+
+### Supervising the watcher
+
+One more thing on each wake, after the effects and the poll: is the watcher
+running? If not, start it — the same `watch start` the logon script runs.
+
+Three guards keep that from being a nuisance:
+
+- **Only what was asked for.** Supervision acts only where `startup enable`
+  installed the logon script, so a checkout that merely runs the scheduler
+  never starts spawning watchers. `settings.supervise_watcher` turns it off.
+- **A deliberate stop is remembered.** `watch stop` leaves `watcher.paused` in
+  the runtime dir, which outlives the process it stopped. The supervisor skips
+  a paused watcher; `watch start` clears the marker.
+- **A failing start is retried on a timer**, once every 5 minutes rather than
+  every wake, and logged once per outage rather than once per attempt.
+
+`watch start` itself waits for the watcher's first heartbeat and reports
+whether it is *running*, never merely that a launch was issued — the CLI turns
+a failure into a non-zero exit, because a launcher that always succeeds is how
+a watcher goes missing unnoticed.
 
 ### GitHub polling
 
