@@ -10,12 +10,24 @@ name = "blink(1) agent status"
 version = "0.1.0"
 min_herdr_version = "0.9.0"
 description = "Flash a blink(1) light when an agent finishes or needs attention."
-platforms = ["windows"]
+platforms = ["windows", "linux"]
 
 # Herdr fires this whenever a pane's agent changes state. The handler decides
 # which transitions are worth a flash - the hook itself cannot filter, so every
 # status change reaches the script and most of them are ignored.
+#
+# Native Windows: wscript hides the console that a bare python.exe would
+# otherwise flash on every status change (see handler.vbs).
 [[events]]
 on = "pane.agent_status_changed"
 command = ["wscript.exe", "handler.vbs"]
 platforms = ["windows"]
+
+# Native WSL herdr install: no console-flash problem (there's no window to
+# flash), but the blink(1) light is USB-attached to the Windows side, so
+# handler.py detects it is running on Linux and re-launches blink-light.bat
+# through WSL interop (cmd.exe) instead of calling it directly.
+[[events]]
+on = "pane.agent_status_changed"
+command = ["python3", "handler.py"]
+platforms = ["linux"]

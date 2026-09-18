@@ -63,7 +63,12 @@ DEFAULTS = {
 
 
 def _state_dir() -> Path:
-    base = os.environ.get("HERDR_PLUGIN_STATE_DIR") or os.environ.get("TEMP") or "."
+    base = (
+        os.environ.get("HERDR_PLUGIN_STATE_DIR")
+        or os.environ.get("TEMP")
+        or os.environ.get("TMPDIR")
+        or "/tmp"
+    )
     return Path(base)
 
 
@@ -238,11 +243,47 @@ def focused_panes() -> set[str]:
     }
 
 
+def _windows_launcher_path() -> str | None:
+    """Translate the WSL-mount launcher path into the C:\\... path cmd.exe needs.
+
+    Only called from Linux (see `notify`) - REPO_ROOT lives on the Windows
+    filesystem either way (the plugin is linked from there), so `wslpath -w`
+    always has something valid to translate.
+    """
+    try:
+        completed = subprocess.run(
+            ["wslpath", "-w", str(LAUNCHER)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        log(f"warn: wslpath failed: {exc}")
+        return None
+    if completed.returncode != 0:
+        log(f"warn: wslpath exited {completed.returncode}: {completed.stderr.strip()}")
+        return None
+    return completed.stdout.strip() or None
+
+
 def notify(event: str) -> bool:
     if not LAUNCHER.exists():
         log(f"skip: launcher missing at {LAUNCHER}")
         return False
-    command = ["cmd.exe", "/c", str(LAUNCHER), "notify", "run", event, "--quiet-missing"]
+
+    # blink-light.bat only ever runs on Windows. From a native Linux/WSL herdr
+    # install we reach it through interop (cmd.exe), same as native Windows
+    # reaches it directly - the launcher itself resolves its own directory via
+    # %~dp0, so neither branch needs to worry about cwd.
+    if sys.platform.startswith("win"):
+        launcher_arg = str(LAUNCHER)
+    else:
+        launcher_arg = _windows_launcher_path()
+        if launcher_arg is None:
+            log("skip: could not resolve a Windows path for the launcher")
+            return False
+
+    command = ["cmd.exe", "/c", launcher_arg, "notify", "run", event, "--quiet-missing"]
     try:
         completed = subprocess.run(
             command,

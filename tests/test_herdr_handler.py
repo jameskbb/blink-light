@@ -260,6 +260,46 @@ class HandlerWiringTests(unittest.TestCase):
             del os.environ["HERDR_PLUGIN_EVENT_JSON"]
 
 
+class NotifyPlatformTests(unittest.TestCase):
+    """A native WSL herdr install has no direct line to the USB light, so
+    `notify` must detour through cmd.exe with a translated Windows path."""
+
+    def test_windows_calls_cmd_with_the_launcher_path_unchanged(self) -> None:
+        with patch.object(handler.sys, "platform", "win32"), patch.object(
+            handler.subprocess, "run"
+        ) as run:
+            run.return_value.returncode = 0
+            handler.notify("agent_done")
+
+        command = run.call_args.args[0]
+        self.assertEqual(
+            command,
+            ["cmd.exe", "/c", str(handler.LAUNCHER), "notify", "run", "agent_done", "--quiet-missing"],
+        )
+
+    def test_linux_translates_the_launcher_path_through_wslpath_first(self) -> None:
+        with patch.object(handler.sys, "platform", "linux"), patch.object(
+            handler, "_windows_launcher_path", return_value="C:\\blink-light\\blink-light.bat"
+        ), patch.object(handler.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            handler.notify("agent_blocked")
+
+        command = run.call_args.args[0]
+        self.assertEqual(
+            command,
+            ["cmd.exe", "/c", "C:\\blink-light\\blink-light.bat", "notify", "run", "agent_blocked", "--quiet-missing"],
+        )
+
+    def test_linux_gives_up_quietly_when_wslpath_cannot_resolve_the_path(self) -> None:
+        with patch.object(handler.sys, "platform", "linux"), patch.object(
+            handler, "_windows_launcher_path", return_value=None
+        ), patch.object(handler.subprocess, "run") as run:
+            fired = handler.notify("agent_done")
+
+        self.assertFalse(fired)
+        run.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
 
