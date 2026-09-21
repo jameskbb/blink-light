@@ -149,7 +149,7 @@ def swell_scene(color: str, seconds: float, rise_steps: int = 4) -> dict:
     return {"loop": False, "repeat": 1, "steps": steps}
 
 
-# One slow breath in the dimmed Herdr blue - one finish, one blink. It repeated
+# One slow breath in full Herdr blue - one finish, one blink. It repeated
 # twice, which at a glance was indistinguishable from two agents finishing back
 # to back. Counting flashes is only a signal if the count means something.
 # Named before the scene table because the overflow scene is derived from it.
