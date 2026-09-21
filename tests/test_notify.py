@@ -168,10 +168,11 @@ class BrightnessTests(unittest.TestCase):
         )
 
     def test_agent_done_is_the_one_notification_that_is_not_dimmed(self) -> None:
-        """It was dimmed to hide flashing that a duplicate watcher was causing.
+        """It was dimmed to quiet flashing that was never traced to this event.
 
-        Fixing the watcher removed the reason, and a finish you can miss across
-        a desk is the one thing this flash exists not to be.
+        A finish you can miss across a desk is the one thing this flash exists
+        not to be, so the dimming goes back until something shows the event rate
+        is actually the problem.
         """
         self.assertEqual(AGENT_DONE_BRIGHTNESS, 1.0)
         self.assertGreater(AGENT_DONE_BRIGHTNESS, NOTIFY_BRIGHTNESS)

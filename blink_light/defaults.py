@@ -45,10 +45,11 @@ HERDR_BLUE = "#4FC3F7"
 NOTIFY_BRIGHTNESS = 0.5
 # Full brightness for "the agent finished", alone among the notifications. It
 # was dimmed twice over on the theory that the most frequent event should be
-# the quietest, but frequency was never the problem - a duplicate watcher was
-# replaying the stored pattern behind everyone's back. Dimming the signal to
-# hide a fault only cost the signal: at 12.5% it was easy to miss across a
-# desk, which is the one thing this flash exists not to be.
+# the quietest. That theory was answering bursts of unexplained flashing which
+# no notification had asked for - see the device watchdog note in watcher.py -
+# so dimming treated a symptom that was never this event's to begin with, and
+# cost the signal: at 12.5% it was easy to miss across a desk, which is the one
+# thing this flash exists not to be.
 AGENT_DONE_BRIGHTNESS = 1.0
 AGENT_DONE_COLOR = scale_brightness(HERDR_BLUE, AGENT_DONE_BRIGHTNESS)
 # Blocked shares the palette but sits redder, so the two are told apart by hue

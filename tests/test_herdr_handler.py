@@ -383,39 +383,91 @@ class HandlerWiringTests(unittest.TestCase):
 
 
 class NotifyPlatformTests(unittest.TestCase):
-    """A native WSL herdr install has no direct line to the USB light, so
-    `notify` must detour through cmd.exe with a translated Windows path."""
+    """How `notify` reaches a light that is always on the Windows side.
 
-    def test_windows_calls_cmd_with_the_launcher_path_unchanged(self) -> None:
+    Two paths, and which one is taken matters for latency rather than
+    correctness: the launcher re-hashes requirements.txt with PowerShell on
+    every call, which is about a second spent on every agent turn. The venv
+    interpreter is used when it is there, the launcher when it is not.
+    """
+
+    MISSING_VENV = Path("/nonexistent/.venv/Scripts/python.exe")
+
+    def _present_venv(self) -> Path:
+        """Any real file will do - only `.exists()` is consulted."""
+        return HANDLER_PATH
+
+    def test_windows_runs_the_venv_interpreter_directly(self) -> None:
+        venv = self._present_venv()
         with patch.object(handler.sys, "platform", "win32"), patch.object(
-            handler.subprocess, "run"
-        ) as run:
+            handler, "VENV_PYTHON", venv
+        ), patch.object(handler.subprocess, "run") as run:
             run.return_value.returncode = 0
             handler.notify("agent_done")
 
-        command = run.call_args.args[0]
         self.assertEqual(
-            command,
-            ["cmd.exe", "/c", str(handler.LAUNCHER), "notify", "run", "agent_done", "--quiet-missing"],
+            run.call_args.args[0],
+            [str(venv), "-m", "blink_light", "notify", "run", "agent_done", "--quiet-missing"],
         )
+        self.assertEqual(run.call_args.kwargs["env"]["PYTHONPATH"], str(handler.REPO_ROOT))
 
-    def test_linux_translates_the_launcher_path_through_wslpath_first(self) -> None:
+    def test_linux_runs_the_same_interpreter_with_a_translated_pythonpath(self) -> None:
+        """Interop starts the Windows binary; only what Windows Python reads is translated."""
+        venv = self._present_venv()
         with patch.object(handler.sys, "platform", "linux"), patch.object(
-            handler, "_windows_launcher_path", return_value="C:\\blink-light\\blink-light.bat"
+            handler, "VENV_PYTHON", venv
+        ), patch.object(handler, "_windows_path", return_value="C:\\blink-light"), patch.object(
+            handler.subprocess, "run"
+        ) as run:
+            run.return_value.returncode = 0
+            handler.notify("agent_blocked")
+
+        self.assertEqual(
+            run.call_args.args[0],
+            [str(venv), "-m", "blink_light", "notify", "run", "agent_blocked", "--quiet-missing"],
+        )
+        self.assertEqual(run.call_args.kwargs["env"]["PYTHONPATH"], "C:\\blink-light")
+
+    def test_without_a_venv_linux_falls_back_to_the_launcher_through_cmd(self) -> None:
+        with patch.object(handler.sys, "platform", "linux"), patch.object(
+            handler, "VENV_PYTHON", self.MISSING_VENV
+        ), patch.object(
+            handler, "_windows_path", return_value="C:\\blink-light\\blink-light.bat"
         ), patch.object(handler.subprocess, "run") as run:
             run.return_value.returncode = 0
             handler.notify("agent_blocked")
 
-        command = run.call_args.args[0]
         self.assertEqual(
-            command,
-            ["cmd.exe", "/c", "C:\\blink-light\\blink-light.bat", "notify", "run", "agent_blocked", "--quiet-missing"],
+            run.call_args.args[0],
+            [
+                "cmd.exe",
+                "/c",
+                "C:\\blink-light\\blink-light.bat",
+                "notify",
+                "run",
+                "agent_blocked",
+                "--quiet-missing",
+            ],
+        )
+
+    def test_without_a_venv_windows_falls_back_to_the_launcher(self) -> None:
+        with patch.object(handler.sys, "platform", "win32"), patch.object(
+            handler, "VENV_PYTHON", self.MISSING_VENV
+        ), patch.object(handler.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            handler.notify("agent_done")
+
+        self.assertEqual(
+            run.call_args.args[0],
+            ["cmd.exe", "/c", str(handler.LAUNCHER), "notify", "run", "agent_done", "--quiet-missing"],
         )
 
     def test_linux_gives_up_quietly_when_wslpath_cannot_resolve_the_path(self) -> None:
         with patch.object(handler.sys, "platform", "linux"), patch.object(
-            handler, "_windows_launcher_path", return_value=None
-        ), patch.object(handler.subprocess, "run") as run:
+            handler, "VENV_PYTHON", self.MISSING_VENV
+        ), patch.object(handler, "_windows_path", return_value=None), patch.object(
+            handler.subprocess, "run"
+        ) as run:
             fired = handler.notify("agent_done")
 
         self.assertFalse(fired)

@@ -250,12 +250,13 @@ def run_watch_loop(
 ) -> dict[str, Any]:
     """Run the watcher, but only if no other watcher is already running.
 
-    The pid-file check below is not enough on its own and never was. Two starts
-    that land together both read the pid file before either has written one, so
-    both pass it and both go on to drive the same USB device - which is how a
-    duplicate watcher ends up half-writing the other's pattern, and how a tick
-    that fails on the contention skips re-arming the device watchdog. The lock
-    is the claim, so exactly one process can hold it however many try.
+    A pid-file check cannot do this on its own, and one used to be all there
+    was. Two starts that land together both read the pid file before either has
+    written one, so both pass it and both go on to drive the same USB device.
+    Two processes writing pattern lines to one blink(1) interleave, and a tick
+    that fails on the contention skips re-arming the device watchdog at the end
+    of the tick. The lock is the claim, so exactly one process can hold it
+    however many try.
 
     A loser returns the running watcher's status rather than raising: it is not
     an error for a supervisor, a logon task and a hand-typed `watch start` to
@@ -319,6 +320,36 @@ def _run_watch_loop(
     # starting and ending, not each message.
     calendar_down_since: datetime | None = None
     light_missing_since: datetime | None = None
+    # A lapsed watchdog is not a quiet failure: the blink(1) firmware answers one
+    # by playing the pattern still loaded in its memory, which is whichever
+    # notification scene was written last. The light then repeats a flash nothing
+    # fired, and nothing in any log says why. Both of the tick's failure paths
+    # used to skip the re-arm - a bad calendar read `continue`d past it, and a
+    # DeviceError jumped over it - so the fault that stopped a tick also handed
+    # the light to the firmware. Re-arming is now its own step that runs whatever
+    # else failed, and a tick that genuinely cannot arm it says so.
+    watchdog_lapsed_since: datetime | None = None
+
+    def rearm_watchdog(current: datetime) -> DeviceError | None:
+        """Feed the watchdog, and report the device error if it could not be fed.
+
+        This call is also the tick's proof that the light is still there: it is
+        the one device call that happens on every tick, where the repaint only
+        happens when the colour changes. The caller decides what a failure
+        means, because an unplugged light and a light that is present but
+        unreachable read the same here and want different log lines.
+        """
+        nonlocal watchdog_lapsed_since
+        try:
+            controller.enable_watchdog(int(config["settings"]["watchdog_millis"]))
+        except DeviceError as error:
+            return error
+        if watchdog_lapsed_since is not None:
+            seconds = round((current - watchdog_lapsed_since).total_seconds())
+            LOGGER.info("Device watchdog re-armed after %ss unarmed", seconds)
+            watchdog_lapsed_since = None
+        return None
+
     try:
         while True:
             if paths.watcher_stop_path.exists():
@@ -343,6 +374,9 @@ def _run_watch_loop(
                 if tick_error_logged_at is None or (current - tick_error_logged_at).total_seconds() >= 3600:
                     tick_error_logged_at = current
                     LOGGER.exception("Tick failed; keeping the previous action")
+                # The light is still showing something and still needs the
+                # watchdog fed, whatever the calendar just did.
+                rearm_watchdog(current)
                 time.sleep(float(config["settings"]["tick_seconds"]))
                 continue
             if failed_ticks:
@@ -373,8 +407,18 @@ def _run_watch_loop(
                     # cached signature and let the next tick repaint the real state.
                     last_signature = None
                     LOGGER.info("Fired hourly chime for slot %s", chime_result["slot"])
-                controller.enable_watchdog(int(config["settings"]["watchdog_millis"]))
             except DeviceError as error:
+                device_error = error
+            else:
+                device_error = None
+
+            # Runs whether or not the repaint did, because a lapsed watchdog is
+            # what hands the light to the firmware, and because on a tick that
+            # painted nothing this is the only thing that touches the device.
+            watchdog_error = rearm_watchdog(current)
+            device_error = device_error or watchdog_error
+
+            if device_error is not None:
                 # Undocking takes the light with it. That used to end the
                 # watcher, so re-docking left the light dark until someone
                 # restarted it. Keep ticking, say so once, and forget what was
@@ -382,12 +426,23 @@ def _run_watch_loop(
                 last_signature = None
                 if light_missing_since is None:
                     light_missing_since = current
-                    LOGGER.info("Light not connected; will repaint when it is back: %s", error)
+                    LOGGER.info("Light not connected; will repaint when it is back: %s", device_error)
             else:
                 if light_missing_since is not None:
                     minutes = round((current - light_missing_since).total_seconds() / 60)
                     LOGGER.info("Light connected again after %s min", minutes)
                     light_missing_since = None
+
+            # Logged separately from "light not connected" even though an unplug
+            # trips both, because they are different facts: one says the light
+            # is gone, this one says the firmware is now free to play whatever
+            # pattern it still holds. Once per run of failures, not per tick.
+            if watchdog_error is not None and watchdog_lapsed_since is None:
+                watchdog_lapsed_since = current
+                LOGGER.warning(
+                    "Device watchdog not re-armed; the light may replay its stored pattern: %s",
+                    watchdog_error,
+                )
             write_json(
                 paths.watcher_state_path,
                 {

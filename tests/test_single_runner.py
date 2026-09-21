@@ -1,11 +1,11 @@
 """One watcher, one chime loop, however many things try to start them.
 
 Both loops guarded themselves by reading a pid file and standing down if it
-named a live process. Two starts that land together both read it before either
-has written one, so both passed and the desk ended up with two of each: two
+named a live process, which cannot hold: two starts that land together both read
+it before either has written one, so both pass. The cost if they do is two
 processes driving one USB device, two supervising the watcher, and `chime stop`
-able to signal only whichever one the pid file happened to name. The other
-became an orphan that nothing tracked and nothing could stop cleanly.
+able to signal only whichever one the pid file happens to name - the other left
+running with nothing tracking it.
 
 These pin the replacement - a lock held for the loop's whole life, so the check
 *is* the claim - and the properties that make it safe to hold for hours: a

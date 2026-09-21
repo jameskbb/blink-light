@@ -42,6 +42,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER = REPO_ROOT / "blink-light.bat"
+# The launcher bootstraps the venv and hashes requirements.txt with PowerShell on
+# every single call - about a second, spent to discover nothing changed. That is
+# the right trade for a command you type and the wrong one here, where this runs
+# every time an agent finishes. `docs/INSTRUCTIONS.md` says as much: call the
+# interpreter directly on a hot path. The launcher stays as the fallback, so a
+# checkout whose venv has not been built yet still works, slowly.
+VENV_PYTHON = REPO_ROOT / ".venv" / "Scripts" / "python.exe"
 
 # Which agent states count as "the agent stopped and wants you".
 TERMINAL_STATUSES = {
@@ -298,8 +305,8 @@ def queued_behind(pane: str, state: dict, snapshot: dict[str, dict]) -> int:
     return waiting
 
 
-def _windows_launcher_path() -> str | None:
-    """Translate the WSL-mount launcher path into the C:\\... path cmd.exe needs.
+def _windows_path(path: Path) -> str | None:
+    """Translate a WSL-mount path into the C:\\... form Windows needs.
 
     Only called from Linux (see `notify`) - REPO_ROOT lives on the Windows
     filesystem either way (the plugin is linked from there), so `wslpath -w`
@@ -307,7 +314,7 @@ def _windows_launcher_path() -> str | None:
     """
     try:
         completed = subprocess.run(
-            ["wslpath", "-w", str(LAUNCHER)],
+            ["wslpath", "-w", str(path)],
             capture_output=True,
             text=True,
             timeout=5,
@@ -321,28 +328,53 @@ def _windows_launcher_path() -> str | None:
     return completed.stdout.strip() or None
 
 
-def notify(event: str) -> bool:
+def _notify_command(event: str) -> tuple[list[str], dict[str, str]] | None:
+    """Build the command that plays one event, and the environment it needs.
+
+    Everything here ends up running on Windows - the blink(1) is attached to
+    that side - so from a native Linux/WSL herdr install both branches go
+    through interop. The fast path runs the venv interpreter as a Windows
+    binary directly, with no cmd.exe and no launcher in between; PYTHONPATH
+    carries the repo so `-m blink_light` resolves without depending on how the
+    working directory survives the interop boundary.
+    """
+    args = ["-m", "blink_light", "notify", "run", event, "--quiet-missing"]
+    on_windows = sys.platform.startswith("win")
+
+    if VENV_PYTHON.exists():
+        if on_windows:
+            return [str(VENV_PYTHON), *args], {"PYTHONPATH": str(REPO_ROOT)}
+        root = _windows_path(REPO_ROOT)
+        if root is not None:
+            # The interpreter is launched by its WSL path - interop starts the
+            # Windows binary either way - but PYTHONPATH is read by Windows
+            # Python, so that one has to be translated.
+            return [str(VENV_PYTHON), *args], {"PYTHONPATH": root}
+        log("warn: could not resolve a Windows path for the repo; using the launcher")
+
     if not LAUNCHER.exists():
-        log(f"skip: launcher missing at {LAUNCHER}")
+        log(f"skip: no venv interpreter and no launcher at {LAUNCHER}")
+        return None
+    if on_windows:
+        return ["cmd.exe", "/c", str(LAUNCHER), "notify", "run", event, "--quiet-missing"], {}
+    launcher_arg = _windows_path(LAUNCHER)
+    if launcher_arg is None:
+        log("skip: could not resolve a Windows path for the launcher")
+        return None
+    return ["cmd.exe", "/c", launcher_arg, "notify", "run", event, "--quiet-missing"], {}
+
+
+def notify(event: str) -> bool:
+    built = _notify_command(event)
+    if built is None:
         return False
+    command, extra_env = built
 
-    # blink-light.bat only ever runs on Windows. From a native Linux/WSL herdr
-    # install we reach it through interop (cmd.exe), same as native Windows
-    # reaches it directly - the launcher itself resolves its own directory via
-    # %~dp0, so neither branch needs to worry about cwd.
-    if sys.platform.startswith("win"):
-        launcher_arg = str(LAUNCHER)
-    else:
-        launcher_arg = _windows_launcher_path()
-        if launcher_arg is None:
-            log("skip: could not resolve a Windows path for the launcher")
-            return False
-
-    command = ["cmd.exe", "/c", launcher_arg, "notify", "run", event, "--quiet-missing"]
     try:
         completed = subprocess.run(
             command,
             cwd=str(REPO_ROOT),
+            env={**os.environ, **extra_env} if extra_env else None,
             capture_output=True,
             text=True,
             timeout=45,

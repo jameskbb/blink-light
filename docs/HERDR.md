@@ -39,9 +39,11 @@ peripheral vision all day.
 
 `agent_done` is the exception and runs at full. It was dimmed twice over, on the
 theory that the most frequent event should be the quietest — but the flashing
-that theory was answering turned out to be a duplicate watcher replaying the
-device's stored pattern, not the event rate. Dimming a signal to hide a fault
-only costs you the signal, and at 12.5% this one was easy to miss across a desk.
+that theory was answering was never traced to the event rate. The light was
+repeating a notification pattern nothing had fired, which points at the device
+watchdog rather than at how often agents finish. Dimming a signal to quiet a
+fault elsewhere only costs you the signal, and at 12.5% this one was easy to
+miss across a desk.
 
 One finish is one blink. It used to be two, which at a glance was
 indistinguishable from two agents finishing back to back - and once the burst cap
@@ -76,8 +78,15 @@ Herdr server detects working → idle
    └── fires pane.agent_status_changed
          └── wscript.exe handler.vbs          (hides the console)
                └── python handler.py           (decides if it is worth a flash)
-                     └── blink-light.bat notify run agent_done
+                     └── .venv\Scripts\python.exe -m blink_light notify run agent_done
 ```
+
+That last step skips `blink-light.bat` on purpose. The launcher re-hashes
+`requirements.txt` with PowerShell on every call — around a second, to discover
+that nothing changed — which is the right trade for a command you type and the
+wrong one for something that runs every time an agent finishes. The launcher is
+still the fallback when there is no `.venv` yet, so a fresh checkout works before
+anyone has bootstrapped it.
 
 Herdr does **not** learn about completion from a Claude Code hook — it
 screen-scrapes the pane and runs its own state machine (the rules live in
