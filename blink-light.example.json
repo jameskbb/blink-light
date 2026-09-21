@@ -272,19 +272,19 @@
       "repeat": 1,
       "steps": [
         {
-          "color": "#050C10",
-          "seconds": 0.225
-        },
-        {
-          "color": "#0A181F",
-          "seconds": 0.225
-        },
-        {
-          "color": "#0F252E",
-          "seconds": 0.225
-        },
-        {
           "color": "#14313E",
+          "seconds": 0.225
+        },
+        {
+          "color": "#28627C",
+          "seconds": 0.225
+        },
+        {
+          "color": "#3B92B9",
+          "seconds": 0.225
+        },
+        {
+          "color": "#4FC3F7",
           "seconds": 0.225
         },
         {
@@ -298,7 +298,7 @@
       "repeat": 1,
       "steps": [
         {
-          "color": "#14313E",
+          "color": "#4FC3F7",
           "seconds": 0.45
         },
         {

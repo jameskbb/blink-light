@@ -20,6 +20,7 @@ from .calendar_source import (
 from .log_file import close_log, open_log
 from .paths import AppPaths, ensure_runtime_dirs
 from .rules import first_matching_rule, is_between_times
+from .slot_lock import single_instance
 from .startup import startup_status
 from .state import is_process_running, read_json, remove_file, write_json
 from .system_state import collect_system_snapshot
@@ -240,6 +241,44 @@ def apply_once(
 
 
 def run_watch_loop(
+    config: dict[str, Any],
+    paths: AppPaths,
+    controller_cls=BlinkDeviceController,
+    snapshot_factory: Callable[[datetime | None], Any] = collect_system_snapshot,
+    now_factory: Callable[[], datetime] = _now,
+    background: bool = False,
+) -> dict[str, Any]:
+    """Run the watcher, but only if no other watcher is already running.
+
+    The pid-file check below is not enough on its own and never was. Two starts
+    that land together both read the pid file before either has written one, so
+    both pass it and both go on to drive the same USB device - which is how a
+    duplicate watcher ends up half-writing the other's pattern, and how a tick
+    that fails on the contention skips re-arming the device watchdog. The lock
+    is the claim, so exactly one process can hold it however many try.
+
+    A loser returns the running watcher's status rather than raising: it is not
+    an error for a supervisor, a logon task and a hand-typed `watch start` to
+    all decide the watcher should be up.
+    """
+    ensure_runtime_dirs(paths)
+    with single_instance(paths.watcher_lock_path) as only_instance:
+        if not only_instance:
+            open_log(LOGGER, paths.log_path, "watcher")
+            LOGGER.info("Watcher already running; this one is standing down")
+            close_log(LOGGER)
+            return watch_status(paths)
+        return _run_watch_loop(
+            config,
+            paths,
+            controller_cls=controller_cls,
+            snapshot_factory=snapshot_factory,
+            now_factory=now_factory,
+            background=background,
+        )
+
+
+def _run_watch_loop(
     config: dict[str, Any],
     paths: AppPaths,
     controller_cls=BlinkDeviceController,

@@ -160,17 +160,26 @@ class BrightnessTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             scale_brightness("#FFF", 0.5)
 
-    def test_agent_done_is_herdr_blue_at_a_quarter(self) -> None:
-        self.assertEqual(AGENT_DONE_COLOR, scale_brightness(HERDR_BLUE, 0.25))
+    def test_agent_done_is_herdr_blue_at_full(self) -> None:
+        self.assertEqual(AGENT_DONE_COLOR, HERDR_BLUE)
         self.assertEqual(
             default_config()["scenes"]["agent_done_scene"]["steps"][0]["color"],
             AGENT_DONE_COLOR,
         )
 
-    def test_agent_done_is_dimmer_than_the_other_notifications(self) -> None:
-        """It fires on every agent turn, so it has to sit quieter than the rest."""
-        self.assertEqual(AGENT_DONE_BRIGHTNESS, NOTIFY_BRIGHTNESS * 0.5)
-        self.assertLess(AGENT_DONE_BRIGHTNESS, NOTIFY_BRIGHTNESS)
+    def test_agent_done_is_the_one_notification_that_is_not_dimmed(self) -> None:
+        """It was dimmed to hide flashing that a duplicate watcher was causing.
+
+        Fixing the watcher removed the reason, and a finish you can miss across
+        a desk is the one thing this flash exists not to be.
+        """
+        self.assertEqual(AGENT_DONE_BRIGHTNESS, 1.0)
+        self.assertGreater(AGENT_DONE_BRIGHTNESS, NOTIFY_BRIGHTNESS)
+
+    def test_the_overflow_swell_climbs_to_the_same_full_blue(self) -> None:
+        steps = default_config()["scenes"]["agent_done_more_scene"]["steps"]
+        self.assertEqual(steps[-2]["color"], AGENT_DONE_COLOR)
+        self.assertEqual(steps[0]["color"], scale_brightness(AGENT_DONE_COLOR, 0.25))
 
     def test_done_and_blocked_are_visually_distinct(self) -> None:
         self.assertNotEqual(AGENT_DONE_COLOR, AGENT_BLOCKED_COLOR)

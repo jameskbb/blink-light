@@ -43,10 +43,13 @@ def scale_brightness(color: str, factor: float) -> str:
 # peripheral vision all day, and full brightness reads as an alarm.
 HERDR_BLUE = "#4FC3F7"
 NOTIFY_BRIGHTNESS = 0.5
-# Half again for "the agent finished". It is by far the most frequent event on
-# the light - every agent turn ends in one - so what reads as calm for a CI
-# failure a few times a day reads as flashing when it fires all afternoon.
-AGENT_DONE_BRIGHTNESS = NOTIFY_BRIGHTNESS * 0.5
+# Full brightness for "the agent finished", alone among the notifications. It
+# was dimmed twice over on the theory that the most frequent event should be
+# the quietest, but frequency was never the problem - a duplicate watcher was
+# replaying the stored pattern behind everyone's back. Dimming the signal to
+# hide a fault only cost the signal: at 12.5% it was easy to miss across a
+# desk, which is the one thing this flash exists not to be.
+AGENT_DONE_BRIGHTNESS = 1.0
 AGENT_DONE_COLOR = scale_brightness(HERDR_BLUE, AGENT_DONE_BRIGHTNESS)
 # Blocked shares the palette but sits redder, so the two are told apart by hue
 # as well as by rhythm.

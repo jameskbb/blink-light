@@ -24,6 +24,8 @@ class AppPaths:
     show_state_path: Path
     alarm_state_path: Path
     slot_lock_path: Path
+    watcher_lock_path: Path
+    chime_lock_path: Path
     override_path: Path
     timer_path: Path
     watcher_pid_path: Path
@@ -80,6 +82,11 @@ def build_paths(
         # held for a claim, and it keeps two effects racing at the same second
         # from reaching the device together.
         slot_lock_path=runtime / "slot.lock",
+        # One per long-lived loop, and separate from the shared claim lock
+        # above: these are held for the process's whole life, so sharing a file
+        # with a lock taken and dropped every slot would deadlock both.
+        watcher_lock_path=runtime / "watcher.lock",
+        chime_lock_path=runtime / "chime.lock",
         override_path=runtime / "override.json",
         timer_path=runtime / "timer.json",
         watcher_pid_path=runtime / "watcher.pid",

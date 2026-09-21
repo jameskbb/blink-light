@@ -26,17 +26,22 @@ and silence it with `herdr plugin disable blinklight.agent-status`.
 
 | Agent finishes | Light does | Colour | Event |
 |---|---|---|---|
-| → `idle` or `done` | One slow breath | Herdr blue at 25% (`#14313E`) | `agent_done` |
-| → `idle` or `done`, with more still waiting | One slow climb out of the dark, a quarter longer | Herdr blue, 6% climbing to 25% | `agent_done_more` |
+| → `idle` or `done` | One slow breath | Herdr blue, full (`#4FC3F7`) | `agent_done` |
+| → `idle` or `done`, with more still waiting | One slow climb out of the dark, a quarter longer | Herdr blue, 25% climbing to full (`#14313E` → `#4FC3F7`) | `agent_done_more` |
 | → `blocked` | Three quicker breaths | Red at 50% (`#801E00`) | `agent_blocked` |
 | → `working` | Nothing | — | — |
 
-Colours are derived, not hand-mixed: `scale_brightness("#4FC3F7", 0.25)`. Scaling
+Colours are derived, not hand-mixed: `scale_brightness("#FF3D00", 0.5)`. Scaling
 all three channels by the same factor keeps the hue recognisable, where clamping
-or blending toward grey would shift it. Full brightness reads as an alarm on a
-light that sits in your peripheral vision all day, hence the dimming — and
-`agent_done` goes to half again of the other notifications, because it fires on
-every agent turn and they do not.
+or blending toward grey would shift it. Most notifications are dimmed to half,
+because full brightness reads as an alarm on a light that sits in your
+peripheral vision all day.
+
+`agent_done` is the exception and runs at full. It was dimmed twice over, on the
+theory that the most frequent event should be the quietest — but the flashing
+that theory was answering turned out to be a duplicate watcher replaying the
+device's stored pattern, not the event rate. Dimming a signal to hide a fault
+only costs you the signal, and at 12.5% this one was easy to miss across a desk.
 
 One finish is one blink. It used to be two, which at a glance was
 indistinguishable from two agents finishing back to back - and once the burst cap

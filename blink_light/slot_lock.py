@@ -79,6 +79,44 @@ def _release(handle) -> None:
 
 
 @contextmanager
+def single_instance(path: Path) -> Iterator[bool]:
+    """Hold a lock for the caller's whole life, yielding whether it is the only one.
+
+    The long-lived loops - the watcher and the chime - each guarded themselves
+    by reading a pid file and standing down if it named a live process. Two
+    starts that land together both read it before either has written, so both
+    pass, and the result is two loops fighting over one USB device and one set
+    of state files. Nothing about a check-then-act can fix that; the check has
+    to *be* the claim.
+
+    Unlike ``slot_lock`` this never retries. A loser is not racing for a turn,
+    it is a duplicate that should not exist, and the wanted behaviour is to
+    exit immediately rather than queue behind a process that will hold this for
+    hours. It also keeps its own file per loop, because the byte-range lock
+    ``msvcrt`` takes would otherwise collide with the shared claim lock.
+
+    A runtime dir that cannot be opened yields True, matching ``slot_lock``:
+    the guard is a safety net, and losing it must not stop the light working.
+    """
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = open(path, "a+b")
+    except OSError:
+        yield True
+        return
+
+    acquired = False
+    try:
+        handle.seek(0)
+        acquired = _try_acquire(handle)
+        yield acquired
+    finally:
+        if acquired:
+            _release(handle)
+        handle.close()
+
+
+@contextmanager
 def slot_lock(path: Path, timeout_seconds: float | None = None) -> Iterator[bool]:
     """Hold the claim lock, yielding whether it was actually acquired.
 

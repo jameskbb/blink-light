@@ -24,7 +24,7 @@ from .device import BlinkDeviceController, DeviceError
 from .log_file import close_log, open_log
 from .paths import AppPaths, ensure_runtime_dirs
 from .rules import is_between_times
-from .slot_lock import slot_lock
+from .slot_lock import single_instance, slot_lock
 from .state import is_process_running, read_json, remove_file, write_json
 
 TASK_NAME = "BlinkLight Hourly Chime"
@@ -344,7 +344,40 @@ def run_chime_loop(
     (sleep/resume, DST) is picked up within a minute, and a stop request is
     honored promptly. Each wake does only date arithmetic and one small JSON
     read unless the slot is actually due.
+
+    Only one may run at a time, for the same reason as the watcher: two loops
+    both supervising the watcher, both polling GitHub and both driving one
+    device is how a desk ends up with two of everything and no way to stop the
+    pair cleanly - `chime stop` signals the pid file, which names only one of
+    them. The lock is held for the loop's whole life, so a second start exits
+    at once instead of becoming an orphan nothing tracks.
     """
+    ensure_runtime_dirs(paths)
+    with single_instance(paths.chime_lock_path) as only_instance:
+        if not only_instance:
+            return {"ran": False, "reason": "already-running"}
+        return _run_chime_loop(
+            config,
+            paths,
+            controller_cls=controller_cls,
+            now_factory=now_factory,
+            sleep=sleep,
+            max_iterations=max_iterations,
+            stop_check=stop_check,
+            supervisor=supervisor,
+        )
+
+
+def _run_chime_loop(
+    config: dict[str, Any],
+    paths: AppPaths,
+    controller_cls=BlinkDeviceController,
+    now_factory: Callable[[], datetime] = _now,
+    sleep: Callable[[float], None] | None = None,
+    max_iterations: int | None = None,
+    stop_check: Callable[[], bool] | None = None,
+    supervisor=None,
+) -> dict[str, Any]:
     import time as _time
 
     from .alarms import fire_due_alarms, seconds_until_next_alarm
