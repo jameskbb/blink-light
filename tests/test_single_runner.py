@@ -17,6 +17,7 @@ light its watcher.
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -24,6 +25,7 @@ import unittest
 
 from blink_light.chime import run_chime_loop
 from blink_light.defaults import default_config
+from blink_light.log_file import close_log
 from blink_light.paths import build_paths
 from blink_light.slot_lock import single_instance, slot_lock
 from blink_light.state import write_json
@@ -74,7 +76,11 @@ class SingleInstanceLockTests(unittest.TestCase):
 class StandDownTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
+        # Before the tempdir cleanup, so it runs after it: a watcher that fails
+        # part-way leaves the log handler attached, and Windows will not delete
+        # a directory holding an open file.
         self.addCleanup(self.tempdir.cleanup)
+        self.addCleanup(close_log, logging.getLogger("blink_light.watcher"))
         root = Path(self.tempdir.name)
         self.paths = build_paths(project_root=root, runtime_dir=root / "runtime")
         self.config = default_config()
