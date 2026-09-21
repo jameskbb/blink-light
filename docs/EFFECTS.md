@@ -102,7 +102,7 @@ preset for "heads down" — long enough that it never pulls your eye.
 Two quick thumps and a long rest. Peripheral vision resolves rhythm far better
 than it resolves hue, so a heartbeat is distinguishable from a breath across a
 room even if both are the same colour. That is the whole reason this repo's
-`agent_done` (two slow breaths) and `agent_blocked` (three quick ones) differ in
+`agent_done` (one slow breath) and `agent_blocked` (three quick ones) differ in
 cadence as well as colour.
 
 ```json

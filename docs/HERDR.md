@@ -26,7 +26,7 @@ and silence it with `herdr plugin disable blinklight.agent-status`.
 
 | Agent finishes | Light does | Colour | Event |
 |---|---|---|---|
-| → `idle` or `done` | Two slow breaths | Herdr blue at 25% (`#14313E`) | `agent_done` |
+| → `idle` or `done` | One slow breath | Herdr blue at 25% (`#14313E`) | `agent_done` |
 | → `idle` or `done`, with more still waiting | One slow climb out of the dark, a quarter longer | Herdr blue, 6% climbing to 25% | `agent_done_more` |
 | → `blocked` | Three quicker breaths | Red at 50% (`#801E00`) | `agent_blocked` |
 | → `working` | Nothing | — | — |
@@ -38,8 +38,11 @@ light that sits in your peripheral vision all day, hence the dimming — and
 `agent_done` goes to half again of the other notifications, because it fires on
 every agent turn and they do not.
 
-Done and blocked differ in **both hue and rhythm**, so they stay distinguishable
-at a glance and to a colour-blind viewer. Every step is a fade rather than a jump,
+One finish is one blink. It used to be two, which at a glance was
+indistinguishable from two agents finishing back to back - and once the burst cap
+below started counting flashes for you, a count that meant nothing was worse than
+no count. Done and blocked differ in **both hue and rhythm**, so they stay
+distinguishable at a glance and to a colour-blind viewer. Every step is a fade rather than a jump,
 so they read as breaths instead of blinks.
 
 To change the brightness or colour, edit `HERDR_BLUE` / `AGENT_DONE_BRIGHTNESS` in

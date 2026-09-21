@@ -78,8 +78,8 @@ Everything a fresh install does, in one place. Values are the built-in defaults 
 
 | Trigger | What | Colour | Length | Preview it |
 | --- | --- | --- | --- | --- |
-| AI agent finishes ([Herdr](docs/HERDR.md)) | 2 slow breaths | 🔵 `#14313E` — Herdr blue at 25% | 1.80s | `notify run agent_done` |
-| …and more agents are still waiting | One slow climb out of the dark | 🔵 `#050C10` → `#14313E` — Herdr blue, 6% climbing to 25% | 2.25s | `notify run agent_done_more` |
+| AI agent finishes ([Herdr](docs/HERDR.md)) | One slow breath | 🔵 `#14313E` — Herdr blue at 25% | 0.90s | `notify run agent_done` |
+| …and more agents are still waiting | One slow climb out of the dark | 🔵 `#050C10` → `#14313E` — Herdr blue, 6% climbing to 25% | 1.12s | `notify run agent_done_more` |
 | AI agent blocked | 3 quicker breaths | 🔴 `#801E00` — dim red | 1.26s | `notify run agent_blocked` |
 | GitHub Actions run you triggered fails (opt-in) | 2 pairs of heartbeat thumps | 🟠 `#803C00` — dim orange-red | 2.40s | `notify run ci_failed` |
 | A pull request review is requested from you (opt-in) | A pulse handed from the top LED to the bottom, twice | 🟣 `#442C72` — dim violet | 2.24s | `notify run pr_review_requested` |

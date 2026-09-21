@@ -273,29 +273,29 @@
       "steps": [
         {
           "color": "#050C10",
-          "seconds": 0.45
+          "seconds": 0.225
         },
         {
           "color": "#0A181F",
-          "seconds": 0.45
+          "seconds": 0.225
         },
         {
           "color": "#0F252E",
-          "seconds": 0.45
+          "seconds": 0.225
         },
         {
           "color": "#14313E",
-          "seconds": 0.45
+          "seconds": 0.225
         },
         {
           "color": "#000000",
-          "seconds": 0.45
+          "seconds": 0.225
         }
       ]
     },
     "agent_done_scene": {
       "loop": false,
-      "repeat": 2,
+      "repeat": 1,
       "steps": [
         {
           "color": "#14313E",
