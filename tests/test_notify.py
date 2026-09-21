@@ -5,8 +5,10 @@ import unittest
 from blink_light.config import ConfigError, merge_config, validate_config
 from blink_light.defaults import (
     AGENT_BLOCKED_COLOR,
+    AGENT_DONE_BRIGHTNESS,
     AGENT_DONE_COLOR,
     HERDR_BLUE,
+    NOTIFY_BRIGHTNESS,
     default_config,
     scale_brightness,
     scene_duration_seconds,
@@ -157,12 +159,17 @@ class BrightnessTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             scale_brightness("#FFF", 0.5)
 
-    def test_agent_done_is_herdr_blue_at_half(self) -> None:
-        self.assertEqual(AGENT_DONE_COLOR, scale_brightness(HERDR_BLUE, 0.5))
+    def test_agent_done_is_herdr_blue_at_a_quarter(self) -> None:
+        self.assertEqual(AGENT_DONE_COLOR, scale_brightness(HERDR_BLUE, 0.25))
         self.assertEqual(
             default_config()["scenes"]["agent_done_scene"]["steps"][0]["color"],
             AGENT_DONE_COLOR,
         )
+
+    def test_agent_done_is_dimmer_than_the_other_notifications(self) -> None:
+        """It fires on every agent turn, so it has to sit quieter than the rest."""
+        self.assertEqual(AGENT_DONE_BRIGHTNESS, NOTIFY_BRIGHTNESS * 0.5)
+        self.assertLess(AGENT_DONE_BRIGHTNESS, NOTIFY_BRIGHTNESS)
 
     def test_done_and_blocked_are_visually_distinct(self) -> None:
         self.assertNotEqual(AGENT_DONE_COLOR, AGENT_BLOCKED_COLOR)
