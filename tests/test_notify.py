@@ -39,6 +39,7 @@ class NotifyTests(unittest.TestCase):
             [
                 "agent_blocked",
                 "agent_done",
+                "agent_done_more",
                 "ci_failed",
                 "pr_mentioned",
                 "pr_review_received",

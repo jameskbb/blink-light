@@ -122,6 +122,45 @@ def scene_duration_seconds(scene: dict) -> float:
     return sum(float(step["seconds"]) for step in scene.get("steps", [])) * int(scene.get("repeat", 1))
 
 
+def swell_scene(color: str, seconds: float, rise_steps: int = 4) -> dict:
+    """One slow climb out of the dark, then a drop back to it.
+
+    The blink(1) fades to each pattern line over that line's own duration, so a
+    ladder of brightnesses plays as a single continuous rise rather than as
+    separate steps. That rise is the whole point: every other notification
+    repeats a fixed breath, so a scene that *grows* is the one shape none of
+    them can be mistaken for, which is what makes it legible as "and there is
+    more behind this one" rather than as another finish.
+    """
+    fall_seconds = seconds * 0.2
+    rise_seconds = (seconds - fall_seconds) / rise_steps
+    steps = [
+        {
+            "color": scale_brightness(color, (index + 1) / rise_steps),
+            "seconds": round(rise_seconds, 3),
+        }
+        for index in range(rise_steps)
+    ]
+    steps.append({"color": "#000000", "seconds": round(fall_seconds, 3)})
+    return {"loop": False, "repeat": 1, "steps": steps}
+
+
+# Two slow breaths in the dimmed Herdr blue. Named before the scene table
+# because the overflow scene below is derived from its length.
+AGENT_DONE_SCENE = {
+    "loop": False,
+    "repeat": 2,
+    "steps": [
+        {"color": AGENT_DONE_COLOR, "seconds": 0.45},
+        {"color": "#000000", "seconds": 0.45},
+    ],
+}
+# A quarter longer than an ordinary finish. Long enough to register as "that
+# one was different" in peripheral vision, short enough that it is still over
+# before you have turned your head.
+AGENT_DONE_MORE_SECONDS = scene_duration_seconds(AGENT_DONE_SCENE) * 1.25
+
+
 BUILTIN_PRESETS = {
     "available": {"color": "#00C853", "fade_ms": 150},
     "busy": {"color": "#D50000", "fade_ms": 150},
@@ -158,14 +197,10 @@ BUILTIN_SCENES = {
     # Every step is a fade rather than a jump, so these read as breaths instead
     # of blinks. Done and blocked differ in both hue and rhythm: two slow
     # breaths versus three quick ones.
-    "agent_done_scene": {
-        "loop": False,
-        "repeat": 2,
-        "steps": [
-            {"color": AGENT_DONE_COLOR, "seconds": 0.45},
-            {"color": "#000000", "seconds": 0.45},
-        ],
-    },
+    "agent_done_scene": AGENT_DONE_SCENE,
+    # Fired in place of the last finish a burst is allowed, when more agents
+    # are still sitting unannounced behind it. See BUILTIN_NOTIFY.
+    "agent_done_more_scene": swell_scene(AGENT_DONE_COLOR, AGENT_DONE_MORE_SECONDS),
     "agent_blocked_scene": {
         "loop": False,
         "repeat": 3,
@@ -353,6 +388,12 @@ PR_EVENTS = {
 BUILTIN_NOTIFY = {
     "ci_failed": {"scene": "ci_failed_scene"},
     "agent_done": {"scene": "agent_done_scene"},
+    # When several agents finish at once the light would otherwise fire once
+    # per agent, and a stream of identical flashes says nothing a single one
+    # did not. The Herdr plugin caps a burst at three and spends the third on
+    # this event instead, so the cap is visible rather than silent: you can
+    # tell "three finished" from "three finished and there are more".
+    "agent_done_more": {"scene": "agent_done_more_scene"},
     "agent_blocked": {"scene": "agent_blocked_scene"},
     "pr_review_requested": {"scene": "pr_review_requested_scene"},
     "pr_mentioned": {"scene": "pr_mentioned_scene"},

@@ -27,6 +27,7 @@ and silence it with `herdr plugin disable blinklight.agent-status`.
 | Agent finishes | Light does | Colour | Event |
 |---|---|---|---|
 | → `idle` or `done` | Two slow breaths | Herdr blue at 25% (`#14313E`) | `agent_done` |
+| → `idle` or `done`, with more still waiting | One slow climb out of the dark, a quarter longer | Herdr blue, 6% climbing to 25% | `agent_done_more` |
 | → `blocked` | Three quicker breaths | Red at 50% (`#801E00`) | `agent_blocked` |
 | → `working` | Nothing | — | — |
 
@@ -51,6 +52,7 @@ was showing. Restyle them in `blink-light.json` under `notify`:
 ```json
 "notify": {
   "agent_done": { "scene": "agent_done_scene" },
+  "agent_done_more": { "scene": "agent_done_more_scene" },
   "agent_blocked": { "scene": "agent_blocked_scene" }
 }
 ```
@@ -76,7 +78,7 @@ the result of that, so it fires for every agent Herdr can detect, not just Claud
 
 ## When it fires, and when it stays quiet
 
-Three filters, each fixing a real way the naive version over-fired. The first
+Four filters, each fixing a real way the naive version over-fired. The first
 version flashed **8 times in 17 minutes** across 6 sessions, which read as
 constant.
 
@@ -95,11 +97,31 @@ skip:  w7:p2 idle -> done (not a finish)
 **2. Not for the pane you are watching.** The focused pane needs no alert — you
 can see it. This matches Herdr's own sound, which only plays for background
 workspaces. The payload has no focus flag, so the handler asks
-`herdr agent list --json`, and only when a flash is otherwise imminent, so the
+`herdr agent list`, and only when a flash is otherwise imminent, so the
 subprocess cost is per notification rather than per event.
 
-**3. A cooldown.** Six agents finishing together would otherwise machine-gun the
-light. Default 8 seconds between flashes.
+**3. A per-pane cooldown.** One pane flickering between states would otherwise
+flash twice for one finish. Default 8 seconds, counted per pane: a global
+cooldown meant the busiest agent silently muted every other one.
+
+**4. A burst cap.** Start ten agents and they land together, and ten identical
+flashes tell you nothing three did. A burst — a run of finishes with no real gap
+between them — is capped at three. The third is spent on `agent_done_more`, one
+slow climb out of the dark, whenever agents are still waiting behind it, so the
+cap announces itself rather than silently eating the rest:
+
+```
+fired: agent_done for w1:p2 (working -> done)
+fired: agent_done for w1:p5 (working -> done)
+overflow: 4 more agent(s) waiting behind w1:p8
+fired: agent_done_more for w1:p8 (working -> done)
+skip:  w1:p9 burst cap (agent_done #4 > 3)
+```
+
+An agent is "waiting" when Herdr reports it finished and no flash has gone out
+for that finish — either its event has not reached the handler yet, or the cap
+had already been spent. Each event counts its own burst, so a herd of finishes
+cannot mute `agent_blocked`, the one alert actually asking you for something.
 
 ### Tuning
 
@@ -110,17 +132,21 @@ Drop a `config.json` into the plugin's config directory
 {
   "notify_focused": false,
   "cooldown_seconds": 8,
-  "min_working_seconds": 0
+  "min_working_seconds": 0,
+  "burst_window_seconds": 90,
+  "burst_max_flashes": 3
 }
 ```
 
 | Key | Default | Effect |
 |---|---|---|
 | `notify_focused` | `false` | `true` also flashes for the pane you are looking at. |
-| `cooldown_seconds` | `8` | Minimum gap between flashes. `0` disables. |
+| `cooldown_seconds` | `8` | Minimum gap between flashes **for one pane**. `0` disables. |
 | `min_working_seconds` | `0` | Ignore turns shorter than this — raise it if quick turns are noisy. |
+| `burst_window_seconds` | `90` | A finish this soon after the last one continues the same burst. |
+| `burst_max_flashes` | `3` | Flashes allowed per burst. `0` disables the cap. |
 
-**Still too chatty?** Raise `cooldown_seconds`, or set `min_working_seconds` to
+**Still too chatty?** Lower `burst_max_flashes`, or set `min_working_seconds` to
 something like `30` so only substantial turns announce themselves. To limit it to
 one workspace, add a `workspace_id` check in `handler.py` — the payload carries it.
 
@@ -213,7 +239,9 @@ Expect a cyan/green double blink and a `fired: agent_done` line in the log.
 
 | Symptom | Check |
 |---|---|
-| **Flashing constantly** | Read the log. `fired:` lines name the pane and transition. Raise `cooldown_seconds` or `min_working_seconds`. |
+| **Flashing constantly** | Read the log. `fired:` lines name the pane and transition. Lower `burst_max_flashes`, or raise `min_working_seconds` if the noise is short turns rather than herds. |
+| Every third flash is the long one | That is the cap reporting agents still waiting. `overflow:` lines say how many. |
+| `herdr agent list exited 2` | Herdr's CLI changed shape; focus filtering and the waiting count are both off until it is fixed. |
 | Nothing flashes any more | Are you looking at the pane? Focused panes are skipped by default — set `notify_focused: true`. |
 | No flash, nothing in the log | `herdr plugin list` — is it enabled? `herdr plugin log list` for Herdr's own record. |
 | `not a finish` for every event | The pane never registered `working`, so no transition is seen. Delete `pane-state.json` to reset. |

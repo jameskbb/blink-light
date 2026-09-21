@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -141,13 +142,15 @@ class TransitionTests(unittest.TestCase):
         os.environ.pop("HERDR_PLUGIN_CONFIG_DIR", None)
         self.fired: list[str] = []
         self._notify = handler.notify
-        self._focused = handler.focused_panes
+        self._snapshot = handler.agent_snapshot
         handler.notify = lambda event: (self.fired.append(event), True)[1]
-        handler.focused_panes = lambda: set()
+        # One seam for everything the handler asks Herdr: focus and the agents
+        # still waiting behind a capped burst come from the same query.
+        handler.agent_snapshot = lambda: {}
 
     def tearDown(self) -> None:
         handler.notify = self._notify
-        handler.focused_panes = self._focused
+        handler.agent_snapshot = self._snapshot
         os.environ.pop("HERDR_PLUGIN_EVENT_JSON", None)
         os.environ.pop("HERDR_PLUGIN_STATE_DIR", None)
         os.environ.pop("HERDR_PLUGIN_EVENT", None)
@@ -159,11 +162,15 @@ class TransitionTests(unittest.TestCase):
         )
         handler.main()
 
-    def _no_cooldown(self) -> None:
+    def _settings(self, **values) -> None:
         config_dir = Path(self.tempdir.name) / "config"
         config_dir.mkdir(exist_ok=True)
-        (config_dir / "config.json").write_text('{"cooldown_seconds": 0}', encoding="utf-8")
+        (config_dir / "config.json").write_text(json.dumps(values), encoding="utf-8")
         os.environ["HERDR_PLUGIN_CONFIG_DIR"] = str(config_dir)
+
+    def _no_cooldown(self) -> None:
+        """Isolate the transition rules from the rate limits."""
+        self._settings(cooldown_seconds=0, burst_max_flashes=0)
 
     def test_working_then_idle_fires_once(self) -> None:
         self._event("working")
@@ -206,33 +213,148 @@ class TransitionTests(unittest.TestCase):
         self.assertEqual(self.fired, ["agent_blocked"])
 
     def test_a_focused_pane_is_skipped(self) -> None:
-        handler.focused_panes = lambda: {"w7:p1"}
+        handler.agent_snapshot = lambda: {"w7:p1": {"focused": True, "agent_status": "idle"}}
         self._event("working")
         self._event("idle")
         self.assertEqual(self.fired, [])
 
     def test_the_focus_filter_can_be_disabled(self) -> None:
-        config_dir = Path(self.tempdir.name) / "config"
-        config_dir.mkdir(exist_ok=True)
-        (config_dir / "config.json").write_text('{"notify_focused": true}', encoding="utf-8")
-        os.environ["HERDR_PLUGIN_CONFIG_DIR"] = str(config_dir)
-        handler.focused_panes = lambda: {"w7:p1"}
+        self._settings(notify_focused=True)
+        handler.agent_snapshot = lambda: {"w7:p1": {"focused": True, "agent_status": "idle"}}
         self._event("working")
         self._event("idle")
         self.assertEqual(self.fired, ["agent_done"])
 
-    def test_cooldown_suppresses_a_burst(self) -> None:
+    def test_a_second_pane_is_not_muted_by_the_first_ones_cooldown(self) -> None:
+        """The cooldown is per-pane: a global one let the busiest agent mute the rest."""
         self._event("working", pane="w7:p1")
         self._event("working", pane="w7:p2")
         self._event("idle", pane="w7:p1")
         self._event("idle", pane="w7:p2")
-        # Second pane finished inside the default 8s cooldown.
+        self.assertEqual(self.fired, ["agent_done", "agent_done"])
+
+    def test_the_same_pane_is_still_held_off_by_its_own_cooldown(self) -> None:
+        self._event("working")
+        self._event("idle")
+        self._event("working")
+        self._event("done")
         self.assertEqual(self.fired, ["agent_done"])
 
     def test_first_ever_event_for_a_pane_still_fires(self) -> None:
         """No history must not mean no notification."""
         self._event("idle")
         self.assertEqual(self.fired, ["agent_done"])
+
+
+class BurstCapTests(TransitionTests):
+    """Ten agents landing together must not become ten identical flashes."""
+
+    def _finish(self, pane: str) -> None:
+        self._event("working", pane=pane)
+        self._event("done", pane=pane)
+
+    def test_a_herd_of_finishes_is_capped_at_three_flashes(self) -> None:
+        for index in range(10):
+            self._finish(f"w7:p{index}")
+        self.assertEqual(len(self.fired), 3)
+
+    def test_the_cap_is_configurable(self) -> None:
+        self._settings(burst_max_flashes=5)
+        for index in range(10):
+            self._finish(f"w7:p{index}")
+        self.assertEqual(len(self.fired), 5)
+
+    def test_a_finish_after_the_window_starts_a_fresh_burst(self) -> None:
+        self._settings(burst_window_seconds=0.05, cooldown_seconds=0)
+        for index in range(4):
+            self._finish(f"w7:p{index}")
+        self.assertEqual(len(self.fired), 3)
+
+        time.sleep(0.06)
+        self._finish("w7:p9")
+        self.assertEqual(len(self.fired), 4)
+
+    def test_a_blocked_agent_is_not_muted_by_a_herd_of_finishes(self) -> None:
+        """Blocked is the one alert actually asking you for something."""
+        for index in range(10):
+            self._finish(f"w7:p{index}")
+        self._event("working", pane="w7:p20")
+        self._event("blocked", pane="w7:p20")
+        self.assertEqual(self.fired[-1], "agent_blocked")
+
+    def test_the_last_allowed_flash_reports_the_agents_still_waiting(self) -> None:
+        # Herdr already sees p8 and p9 finished; their events have not arrived.
+        handler.agent_snapshot = lambda: {
+            f"w7:p{index}": {"focused": False, "agent_status": "done"} for index in range(10)
+        }
+        for index in range(3):
+            self._finish(f"w7:p{index}")
+        self.assertEqual(self.fired, ["agent_done", "agent_done", "agent_done_more"])
+
+    def test_the_last_allowed_flash_stays_ordinary_when_nothing_is_waiting(self) -> None:
+        handler.agent_snapshot = lambda: {
+            f"w7:p{index}": {"focused": False, "agent_status": "done"} for index in range(3)
+        }
+        for index in range(3):
+            self._finish(f"w7:p{index}")
+        self.assertEqual(self.fired, ["agent_done"] * 3)
+
+    def test_a_suppressed_finish_counts_as_waiting(self) -> None:
+        handler.agent_snapshot = lambda: {
+            f"w7:p{index}": {"focused": False, "agent_status": "done"} for index in range(5)
+        }
+        # Four finishes arrive; the fourth is capped and left unannounced, so a
+        # fresh burst's third flash should report it as still waiting.
+        for index in range(4):
+            self._finish(f"w7:p{index}")
+        self.assertEqual(self.fired[-1], "agent_done_more")
+
+    def test_an_announced_agent_is_not_counted_as_waiting(self) -> None:
+        handler.agent_snapshot = lambda: {
+            f"w7:p{index}": {"focused": False, "agent_status": "idle"} for index in range(3)
+        }
+        self._settings(burst_window_seconds=0.05, cooldown_seconds=0)
+        self._finish("w7:p0")
+        time.sleep(0.06)
+        self._finish("w7:p1")
+        time.sleep(0.06)
+        self._finish("w7:p2")
+        # Each finished in its own burst and each was announced, so none of them
+        # is outstanding and no flash should claim there is more behind it.
+        self.assertEqual(self.fired, ["agent_done"] * 3)
+
+
+class OverflowSceneTests(unittest.TestCase):
+    """The overflow flash has to be tellable apart from an ordinary finish."""
+
+    def setUp(self) -> None:
+        from blink_light.defaults import default_config, scene_duration_seconds
+
+        config = default_config()
+        self.scenes = config["scenes"]
+        self.notify = config["notify"]
+        self.duration = scene_duration_seconds
+
+    def test_the_overflow_event_is_configured_like_any_other(self) -> None:
+        self.assertEqual(self.notify[handler.OVERFLOW_EVENT], {"scene": "agent_done_more_scene"})
+
+    def test_it_runs_a_quarter_longer_than_an_ordinary_finish(self) -> None:
+        ordinary = self.duration(self.scenes["agent_done_scene"])
+        overflow = self.duration(self.scenes["agent_done_more_scene"])
+        self.assertAlmostEqual(overflow / ordinary, 1.25, places=2)
+
+    def test_it_climbs_from_dim_to_bright_instead_of_repeating_a_breath(self) -> None:
+        steps = self.scenes["agent_done_more_scene"]["steps"]
+        brightness = [sum(int(s["color"].lstrip("#")[i : i + 2], 16) for i in (0, 2, 4)) for s in steps]
+        rise = brightness[:-1]
+        self.assertEqual(rise, sorted(rise), "the rise should be monotonic")
+        self.assertGreater(rise[-1], rise[0], "it should actually get brighter")
+        self.assertEqual(brightness[-1], 0, "and end back in the dark")
+
+    def test_it_is_short_enough_to_run_on_the_device(self) -> None:
+        scene = self.scenes["agent_done_more_scene"]
+        self.assertFalse(scene["loop"])
+        self.assertLessEqual(len(scene["steps"]), 32)
 
 
 class HandlerWiringTests(unittest.TestCase):

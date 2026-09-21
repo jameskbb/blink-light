@@ -94,6 +94,9 @@
     "agent_done": {
       "scene": "agent_done_scene"
     },
+    "agent_done_more": {
+      "scene": "agent_done_more_scene"
+    },
     "ci_failed": {
       "scene": "ci_failed_scene"
     },
@@ -261,6 +264,32 @@
         {
           "color": "#000000",
           "seconds": 0.2
+        }
+      ]
+    },
+    "agent_done_more_scene": {
+      "loop": false,
+      "repeat": 1,
+      "steps": [
+        {
+          "color": "#050C10",
+          "seconds": 0.45
+        },
+        {
+          "color": "#0A181F",
+          "seconds": 0.45
+        },
+        {
+          "color": "#0F252E",
+          "seconds": 0.45
+        },
+        {
+          "color": "#14313E",
+          "seconds": 0.45
+        },
+        {
+          "color": "#000000",
+          "seconds": 0.45
         }
       ]
     },

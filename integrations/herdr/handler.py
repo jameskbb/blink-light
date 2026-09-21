@@ -15,13 +15,19 @@ their absence is why a naive handler flashes far too often:
   only fires on a real transition *into* a terminal state.
 * **The focused pane needs no alert.** You are looking at it. Herdr's own sound
   only plays for background workspaces; this matches that by default.
-* **A screen-scraped state machine can flicker.** A short cooldown stops a burst
-  of transitions from machine-gunning the light.
+* **A screen-scraped state machine can flicker.** A short per-pane cooldown
+  stops one pane's transitions from machine-gunning the light.
+* **Agents finish in herds.** Kick off ten and they land together, and ten
+  identical flashes tell you nothing three did not. A burst - a run of finishes
+  with no real gap between them - is capped at three. The third is spent on
+  `agent_done_more` when agents are still waiting behind it, so the cap
+  announces itself instead of silently eating the rest.
 
 Tunable by dropping a `config.json` in the plugin's config directory
 (`herdr plugin config-dir blinklight.agent-status`):
 
-    {"notify_focused": false, "cooldown_seconds": 8, "min_working_seconds": 0}
+    {"notify_focused": false, "cooldown_seconds": 8, "min_working_seconds": 0,
+     "burst_window_seconds": 90, "burst_max_flashes": 3}
 """
 
 from __future__ import annotations
@@ -59,7 +65,13 @@ DEFAULTS = {
     "notify_focused": False,
     "cooldown_seconds": 8.0,
     "min_working_seconds": 0.0,
+    "burst_window_seconds": 90.0,
+    "burst_max_flashes": 3,
 }
+
+# Spent in place of the last finish a burst is allowed, when more agents are
+# still waiting behind it. Configured in blink-light.json like any other event.
+OVERFLOW_EVENT = "agent_done_more"
 
 
 def _state_dir() -> Path:
@@ -210,8 +222,14 @@ def find_pane(payload: object) -> str | None:
     return _find(payload, PANE_KEYS)
 
 
-def focused_panes() -> set[str]:
-    """Ask Herdr which panes are focused.
+def agent_snapshot() -> dict[str, dict]:
+    """Ask Herdr for every agent pane it currently knows about, keyed by pane.
+
+    `herdr agent list` already emits JSON on stdout; it has no `--json` flag and
+    exits 2 if given one. That mattered more than it looks: the flag was here
+    from the start, so every call failed, the focus filter silently passed
+    nothing, and the light flashed for the pane you were sitting in front of.
+    A non-zero exit is now logged rather than quietly swallowed.
 
     Only called when a flash is otherwise about to happen, so the subprocess
     cost is paid per notification rather than per status change.
@@ -219,28 +237,65 @@ def focused_panes() -> set[str]:
     herdr = os.environ.get("HERDR_BIN_PATH") or "herdr"
     try:
         completed = subprocess.run(
-            [herdr, "agent", "list", "--json"],
+            [herdr, "agent", "list"],
             capture_output=True,
             text=True,
             timeout=10,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        log(f"warn: could not query focus: {exc}")
-        return set()
+        log(f"warn: could not query agents: {exc}")
+        return {}
     if completed.returncode != 0:
-        return set()
+        log(f"warn: herdr agent list exited {completed.returncode}: {(completed.stderr or '').strip()[:200]}")
+        return {}
     try:
         payload = json.loads(completed.stdout)
     except json.JSONDecodeError:
-        return set()
+        log("warn: herdr agent list did not return JSON")
+        return {}
 
     agents = payload.get("result", {}).get("agents", [])
     return {
-        agent.get("pane_id")
+        agent["pane_id"]: agent
         for agent in agents
-        if isinstance(agent, dict) and agent.get("focused") and agent.get("pane_id")
+        if isinstance(agent, dict) and agent.get("pane_id")
     }
+
+
+def focused_panes(snapshot: dict[str, dict] | None = None) -> set[str]:
+    agents = agent_snapshot() if snapshot is None else snapshot
+    return {pane for pane, agent in agents.items() if agent.get("focused")}
+
+
+def queued_behind(pane: str, state: dict, snapshot: dict[str, dict]) -> int:
+    """Count agents that have finished but whose flash this burst will not show.
+
+    A pane counts when Herdr says it is finished and we have not flashed for
+    that finish. That covers both of the ways a finish goes unshown:
+
+    * Its event has not reached us yet. When ten agents land together Herdr is
+      still working through the queue while this handler is already deciding,
+      so our record still says `working` - or, for a pane we have never seen
+      change state at all, says nothing.
+    * We recorded the finish and never announced it, because the burst cap had
+      already been spent.
+
+    A pane that finished earlier and *was* announced is not waiting for
+    anything, which is why `announced` is tracked rather than just status. It
+    is also what keeps a deskful of long-idle agents from making every third
+    flash claim there is more behind it.
+    """
+    waiting = 0
+    for other, agent in snapshot.items():
+        if other == pane or agent.get("agent_status") not in TERMINAL_STATUSES:
+            continue
+        entry = state.get(other)
+        if not isinstance(entry, dict):
+            waiting += 1
+        elif entry.get("status") in ACTIVE_STATUSES or not entry.get("announced", True):
+            waiting += 1
+    return waiting
 
 
 def _windows_launcher_path() -> str | None:
@@ -332,7 +387,17 @@ def main() -> int:
     event = TERMINAL_STATUSES.get(status)
 
     # Record the new status before any early return, so the next event sees it.
-    state[pane] = {"status": status, "at": now}
+    # `announced` starts false for a finish and is set once a flash goes out, so
+    # a suppressed finish stays visibly outstanding to `queued_behind`.
+    # `fired_at` is carried across, not rebuilt: it is what the per-pane
+    # cooldown reads, and dropping it on every status change would leave the
+    # cooldown looking at zero forever.
+    state[pane] = {
+        "status": status,
+        "at": now,
+        "announced": event is None,
+        "fired_at": entry.get("fired_at", 0),
+    }
 
     if event is None:
         write_state(state)
@@ -354,22 +419,57 @@ def main() -> int:
             log(f"skip: {pane} worked only {worked_for:.1f}s (< {min_working}s)")
             return 0
 
+    # The cooldown is per-pane. It was global, which read as "do not machine-gun
+    # the light" but actually meant one agent finishing could swallow a
+    # different agent's alert entirely - with nine panes open, the busiest one
+    # muted the rest. Bursts across panes are the burst cap's job, below.
+    cooldown = float(settings.get("cooldown_seconds") or 0)
+    last_fired = float(entry.get("fired_at") or 0)
+    if cooldown and now - last_fired < cooldown:
+        write_state(state)
+        log(f"skip: {pane} cooldown ({now - last_fired:.1f}s < {cooldown}s)")
+        return 0
+
+    snapshot = agent_snapshot()
+
     if not settings.get("notify_focused"):
-        if pane in focused_panes():
+        if pane in focused_panes(snapshot):
             write_state(state)
             log(f"skip: {pane} is focused")
             return 0
 
-    cooldown = float(settings.get("cooldown_seconds") or 0)
-    last_fired = float(state.get("__last_fired__") or 0)
-    if cooldown and now - last_fired < cooldown:
+    # A burst is a run of finishes with no real gap between them. Ten agents
+    # landing together say nothing ten flashes say better than three, so the
+    # run is capped - and the last flash it is allowed carries the overflow
+    # scene when anything is still waiting, so the cap shows rather than hides.
+    window = float(settings.get("burst_window_seconds") or 0)
+    cap = int(settings.get("burst_max_flashes") or 0)
+    burst = state.get("__burst__") if isinstance(state.get("__burst__"), dict) else {}
+    counts = burst.get("counts") if isinstance(burst.get("counts"), dict) else {}
+    if window and now - float(burst.get("at") or 0) > window:
+        counts = {}
+    # Counted per event so a stampede of finishes cannot mute a blocked agent,
+    # which is the one alert that is actually asking you for something.
+    position = int(counts.get(event) or 0) + 1
+    counts[event] = position
+    state["__burst__"] = {"at": now, "counts": counts}
+
+    if cap and position > cap:
         write_state(state)
-        log(f"skip: cooldown ({now - last_fired:.1f}s < {cooldown}s)")
+        log(f"skip: {pane} burst cap ({event} #{position} > {cap})")
         return 0
 
-    if notify(event):
-        state["__last_fired__"] = now
-        log(f"fired: {event} for {pane} ({previous} -> {status})")
+    fired_event = event
+    if cap and position == cap and event == "agent_done":
+        waiting = queued_behind(pane, state, snapshot)
+        if waiting:
+            fired_event = OVERFLOW_EVENT
+            log(f"overflow: {waiting} more agent(s) waiting behind {pane}")
+
+    if notify(fired_event):
+        state[pane]["announced"] = True
+        state[pane]["fired_at"] = now
+        log(f"fired: {fired_event} for {pane} ({previous} -> {status})")
     write_state(state)
     return 0
 
