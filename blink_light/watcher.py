@@ -289,11 +289,13 @@ def _run_watch_loop(
     del background
     ensure_runtime_dirs(paths)
     open_log(LOGGER, paths.log_path, "watcher")
-    existing = watch_status(paths)
-    if existing["running"] and existing["pid"] != os.getpid():
-        LOGGER.error("Refusing to start: watcher already running with PID %s", existing["pid"])
-        close_log(LOGGER)
-        raise RuntimeError(f"Watcher already running with PID {existing['pid']}.")
+    # No pid check here any more. Holding the lock is the proof that this is the
+    # only watcher, and the old check actively got in the way: `watch_status`
+    # calls a watcher running for 15 seconds after its last heartbeat, so a
+    # stop immediately followed by a start refused itself for a quarter of a
+    # minute - and a killed watcher, which writes no final heartbeat, refused
+    # its own replacement. The state it left behind describes a process that is
+    # provably gone, because we hold what it would have been holding.
 
     controller = controller_cls(serial=config["device"].get("serial"))
     calendar_cache = CalendarCache(config, paths=paths)

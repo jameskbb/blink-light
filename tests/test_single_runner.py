@@ -16,6 +16,7 @@ light its watcher.
 
 from __future__ import annotations
 
+from datetime import datetime
 import os
 from pathlib import Path
 import tempfile
@@ -25,6 +26,7 @@ from blink_light.chime import run_chime_loop
 from blink_light.defaults import default_config
 from blink_light.paths import build_paths
 from blink_light.slot_lock import single_instance, slot_lock
+from blink_light.state import write_json
 from blink_light.watcher import run_watch_loop
 
 
@@ -96,6 +98,28 @@ class StandDownTests(unittest.TestCase):
                 controller_cls=ExplodingController,
             )
         self.assertEqual(result, {"ran": False, "reason": "already-running"})
+
+    def test_a_replacement_starts_even_while_the_dead_watchers_heartbeat_looks_fresh(self) -> None:
+        """Stop then start immediately used to refuse itself for 15 seconds.
+
+        `watch_status` calls a watcher running until its heartbeat is 15s old,
+        and a killed watcher never writes a final one, so the state it left
+        behind described a process that was already gone. Holding the lock is
+        the proof it is gone - reaching the device is what proves we got past
+        the check.
+        """
+        reached_device = RuntimeError("reached the device")
+
+        def exploding(*_args, **_kwargs):
+            raise reached_device
+
+        write_json(
+            self.paths.watcher_state_path,
+            {"pid": 999999, "updated_at": datetime.now().astimezone().isoformat()},
+        )
+        with self.assertRaises(RuntimeError) as caught:
+            run_watch_loop(self.config, self.paths, controller_cls=exploding)
+        self.assertIs(caught.exception, reached_device)
 
     def test_standing_down_leaves_the_holders_pid_file_alone(self) -> None:
         """A loser reports; it does not tidy up after the watcher that won.
