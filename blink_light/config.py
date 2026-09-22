@@ -167,6 +167,16 @@ def validate_config(payload: dict[str, Any]) -> None:
         raise ConfigError("'settings.tick_seconds' must be a positive number.")
     if not isinstance(watchdog_millis, (int, float)) or watchdog_millis <= 0:
         raise ConfigError("'settings.watchdog_millis' must be a positive number.")
+    # A window the tick cannot beat is a watchdog that is always lapsed, and a
+    # lapsed watchdog means the blink(1)'s firmware owns the light rather than
+    # this program. Nothing raises when that happens, so catch it here where
+    # the numbers are side by side instead of on the desk months later.
+    if watchdog_millis <= tick_seconds * 1000:
+        raise ConfigError(
+            "'settings.watchdog_millis' must be longer than 'settings.tick_seconds', "
+            f"or the watchdog can never be fed in time (got {watchdog_millis}ms "
+            f"against a {tick_seconds}s tick)."
+        )
     if not isinstance(settings.get("stop_turns_light_off"), bool):
         raise ConfigError("'settings.stop_turns_light_off' must be a boolean.")
     if not isinstance(settings.get("supervise_watcher"), bool):

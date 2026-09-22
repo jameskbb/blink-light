@@ -749,7 +749,7 @@
     "stop_turns_light_off": true,
     "supervise_watcher": true,
     "tick_seconds": 5,
-    "watchdog_millis": 8000
+    "watchdog_millis": 15000
   },
   "show": {
     "at": "17:00",

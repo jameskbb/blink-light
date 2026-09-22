@@ -14,6 +14,7 @@ from .chime import maybe_fire_chime
 from .device import BlinkDeviceController, DeviceError
 from .calendar_source import (
     CalendarCache,
+    NO_SNAPSHOT,
     acknowledge_calendar_result,
     evaluate_calendar_action,
 )
@@ -93,7 +94,7 @@ def determine_action(
     paths: AppPaths,
     snapshot_factory: Callable[[datetime | None], Any] = collect_system_snapshot,
     now: datetime | None = None,
-    calendar_snapshot=None,
+    calendar_snapshot=NO_SNAPSHOT,
     calendar_poller=None,
 ) -> dict[str, Any]:
     current = now or _now()
@@ -299,7 +300,10 @@ def _run_watch_loop(
     # provably gone, because we hold what it would have been holding.
 
     controller = controller_cls(serial=config["device"].get("serial"))
-    calendar_cache = CalendarCache(config, paths=paths)
+    # Background, so a slow Graph read cannot spend the tick. The inline poll
+    # carried a 20-second HTTP timeout into a loop that has to touch the device
+    # every 5, which is how the blink(1)'s watchdog lapsed with nothing raised.
+    calendar_cache = CalendarCache(config, paths=paths, background=True)
     paths.watcher_pid_path.write_text(str(os.getpid()), encoding="utf-8")
     remove_file(paths.watcher_stop_path)
     # However it was launched, a watcher that is running is not paused.
@@ -504,6 +508,9 @@ def _run_watch_loop(
         LOGGER.exception("Watcher exited on an unhandled error")
         raise
     finally:
+        # Before the device teardown: a refresh still in flight would otherwise
+        # outlive the loop and write a snapshot nothing will ever read.
+        calendar_cache.close()
         # A light that is not plugged in has no watchdog to disarm and is
         # already dark, so there is nothing to report for either step.
         try:

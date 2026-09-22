@@ -353,7 +353,12 @@ BUILTIN_RULES = [
 
 BUILTIN_SETTINGS = {
     "tick_seconds": 5,
-    "watchdog_millis": 8000,
+    # Three ticks, not the 8000 this was. Against a 5-second tick that left
+    # 3 seconds of slack - less than one tick - so a single slow wake handed
+    # the light to the blink(1)'s firmware. The margin is a multiple of the
+    # tick on purpose: the two numbers are only meaningful together, and
+    # `config validate` refuses a watchdog the tick could never beat.
+    "watchdog_millis": 15000,
     "stop_turns_light_off": True,
     # The watcher was only ever started at logon, so one that died mid-session
     # took the calendar colours with it until somebody noticed the light had

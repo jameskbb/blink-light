@@ -289,7 +289,7 @@ What actually costs something is *per-wake work*, and only some kinds:
 | A new condition on existing signals (idle, process running, file exists, time range, battery) | `rules` in `blink-light.json` | **Zero.** No code. |
 | Another scheduled moment (a 9am pulse, a Friday show) | An entry in `alarms` | **Zero.** No code — this is what `alarms` is for. |
 | Reacting to system state continuously | The watcher | Moderate — 5s ticks, and `psutil` enumerates processes each one. |
-| Calendar network or COM access | The watcher, behind a cache | Outlook COM and Graph use the calendar poll interval. |
+| Calendar network or COM access | The watcher, behind a cache | Outlook COM and Graph use the calendar poll interval, on a refresh thread of their own — a slow read must never spend a tick, because a tick that overruns `settings.watchdog_millis` hands the light to the blink(1)'s firmware. |
 | GitHub Actions failures and pull request activity | The scheduler, behind a 5s deadline | One conditional GET per ≥60s, plus one reviews GET per new update on your own pull request and one login GET per scheduler run, all inside the same budget. Measured: 1.512s for the first dry run, 0.897s for a cached-token HTTP 304 poll, 1.861s for the INT-02 dry run below. No extra permanent process. |
 | Reacting to an event from another tool | A `notify` event plus that tool's own hook | **Zero standing cost.** Nothing polls; the other tool pays for the trigger. |
 

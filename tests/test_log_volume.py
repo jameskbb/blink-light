@@ -157,8 +157,11 @@ class WatcherLogTests(unittest.TestCase):
         self.config["calendar"]["enabled"] = True
 
         class FlakyCalendar:
-            def __init__(self, config, poller=None, paths=None):
+            def __init__(self, config, poller=None, paths=None, background=False):
                 self.calls = 0
+
+            def close(self, timeout=5.0):
+                pass
 
             def get(self, now):
                 self.calls += 1

@@ -6,6 +6,7 @@ import inspect
 import json
 from pathlib import Path
 import subprocess
+import threading
 from typing import Any
 
 from .defaults import OUTLOOK_BUSY, OUTLOOK_TENTATIVE
@@ -41,6 +42,13 @@ class CalendarEvent:
         return payload
 
 
+# "No snapshot was supplied" and "the cache has nothing yet" are different
+# answers and want opposite handling: the first should fetch, the second must
+# not, because the watcher's tick is the one place a fetch cannot be afforded.
+# A plain None default cannot tell them apart.
+NO_SNAPSHOT = object()
+
+
 @dataclass(frozen=True)
 class CalendarSnapshot:
     provider: str
@@ -50,21 +58,99 @@ class CalendarSnapshot:
 
 
 class CalendarCache:
-    def __init__(self, config: dict[str, Any], poller=None, paths: AppPaths | None = None):
+    """The most recent calendar snapshot, refreshed no more often than asked.
+
+    Two modes, because the two callers want opposite things. A one-shot command
+    wants an answer and can afford to wait for one, so the default fetches
+    inline. The watcher cannot: its tick is five seconds and a Graph request
+    can spend twenty inside it, which is long enough for the blink(1)'s own
+    watchdog to lapse and hand the light to the firmware. In `background` mode
+    the fetch runs on its own thread and `get` returns whatever has landed, so
+    how slow Graph is stops being the light's problem.
+    """
+
+    def __init__(
+        self,
+        config: dict[str, Any],
+        poller=None,
+        paths: AppPaths | None = None,
+        background: bool = False,
+    ):
         self.config = config
         self.poller = poller or poll_calendar
         self.paths = paths
         self._snapshot: CalendarSnapshot | None = None
         self._next_refresh_at: datetime | None = None
+        self._background = background
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        # A refresh has landed and nothing has started its interval yet. The
+        # interval runs from the tick that first sees the snapshot rather than
+        # from dispatch, so a poll slower than the interval is not already due
+        # again the moment it arrives.
+        self._landed = False
+
+    @property
+    def refreshing(self) -> bool:
+        thread = self._thread
+        return thread is not None and thread.is_alive()
 
     def get(self, now: datetime) -> CalendarSnapshot | None:
         if not calendar_enabled(self.config):
             return None
+        if self._background:
+            return self._get_without_waiting(now)
         if self._snapshot is None or self._next_refresh_at is None or now >= self._next_refresh_at:
             self._snapshot = _call_poller(self.poller, self.config, now, self.paths)
-            refresh_after = int(self.config["calendar"].get("poll_seconds", 30))
-            self._next_refresh_at = now + timedelta(seconds=refresh_after)
+            self._next_refresh_at = now + timedelta(seconds=self._poll_seconds())
         return self._snapshot
+
+    def close(self, timeout: float = 5.0) -> None:
+        """Let an in-flight refresh finish before the caller walks away."""
+        thread = self._thread
+        if thread is not None:
+            thread.join(timeout=timeout)
+
+    def _poll_seconds(self) -> int:
+        return int(self.config["calendar"].get("poll_seconds", 30))
+
+    def _get_without_waiting(self, now: datetime) -> CalendarSnapshot | None:
+        with self._lock:
+            if self._landed:
+                self._landed = False
+                self._next_refresh_at = now + timedelta(seconds=self._poll_seconds())
+            due = self._next_refresh_at is None or now >= self._next_refresh_at
+            # One refresh at a time. Ticks arrive every five seconds and a bad
+            # Graph call can take twenty, so dispatching per due tick would put
+            # four requests and four threads on one unanswered call.
+            if due and not self.refreshing:
+                self._thread = threading.Thread(
+                    target=self._refresh,
+                    args=(now,),
+                    name="blink-light-calendar",
+                    daemon=True,
+                )
+                self._thread.start()
+            return self._snapshot
+
+    def _refresh(self, now: datetime) -> None:
+        try:
+            snapshot = _call_poller(self.poller, self.config, now, self.paths)
+        except Exception as error:
+            # `poll_calendar` already turns a failed read into a snapshot that
+            # carries the error. This is for a poller that breaks outright:
+            # inline that surfaced as the watcher's "Tick failed", but on its
+            # own thread it would die unwatched and leave the light repeating a
+            # stale snapshot with nothing anywhere saying why.
+            snapshot = CalendarSnapshot(
+                provider=self.config["calendar"].get("provider", "outlook"),
+                fetched_at=now,
+                events=[],
+                error=str(error),
+            )
+        with self._lock:
+            self._snapshot = snapshot
+            self._landed = True
 
 
 def calendar_enabled(config: dict[str, Any]) -> bool:
@@ -242,14 +328,20 @@ def evaluate_calendar_action(
     config: dict[str, Any],
     paths: AppPaths,
     now: datetime,
-    snapshot: CalendarSnapshot | None = None,
+    snapshot: Any = NO_SNAPSHOT,
     poller=None,
 ) -> dict[str, Any] | None:
     if not calendar_enabled(config):
         return None
 
-    current_snapshot = snapshot or _call_poller(poller or poll_calendar, config, now, paths)
-    if current_snapshot.error:
+    if snapshot is NO_SNAPSHOT:
+        current_snapshot = _call_poller(poller or poll_calendar, config, now, paths)
+    else:
+        current_snapshot = snapshot
+    # An explicit None is the background cache saying its first refresh has not
+    # landed. Meeting colours wait a tick; rules and the default action cover
+    # the gap, which is the same thing that covers a calendar outage.
+    if current_snapshot is None or current_snapshot.error:
         return None
 
     events = alertable_events(current_snapshot.events, alert_statuses(config))

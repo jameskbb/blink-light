@@ -353,22 +353,26 @@ sub-pattern was lines 0-16, which is where scenes are uploaded, so a lapse
 replayed whichever effect went out last. After a top-of-hour chime that meant
 white on/off at 400 ms, for as long as the stall lasted.
 
-The usual stall is the calendar: the Graph poll runs inside the tick with a
-20-second HTTP timeout, against an 8-second watchdog. A laptop resuming from
-sleep does it too.
+The stall used to be the calendar: the Graph poll ran inside the tick with a
+20-second HTTP timeout, against an 8-second watchdog. It now refreshes on its
+own thread, so a slow read cannot spend the tick, and the default window is
+15000 ms — three ticks, where 8000 left less than one. A laptop resuming from
+sleep still trips it, and always will.
 
-Two things now happen instead. Serverdown is aimed at pattern line 31, which
-this repo keeps permanently black, so a lapse plays nothing. And the watcher
-notices the gap between feeds and says so, then repaints rather than leaving
-the light dark:
+Three things now happen instead. Serverdown is aimed at pattern line 31, which
+this repo keeps permanently black, so a lapse plays nothing. The tick no longer
+waits on the network. And the watcher notices the gap between feeds and says
+so, then repaints rather than leaving the light dark:
 
 ```
 Device watchdog lapsed: 19.4s between feeds against a 8.0s window; the light was the firmware's until now
 ```
 
-Seeing that line often means ticks are being starved — check the network path
-to Graph first. Seeing unexplained flashing *without* it means the cause is
-something other than the watchdog; start with the log.
+Seeing that line often means ticks are being starved by something other than
+the calendar — check machine load, and whether `settings.watchdog_millis` in
+your `blink-light.json` still pins the old 8000. Seeing unexplained flashing
+*without* it means the cause is something other than the watchdog; start with
+the log.
 
 ### Duplicate pulses, or a light left on after an effect
 

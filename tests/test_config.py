@@ -99,6 +99,22 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(payload["settings"]["tick_seconds"], 5)
         self.assertIn("busy", payload["presets"])
 
+    def test_a_watchdog_shorter_than_the_tick_can_never_be_fed_in_time(self) -> None:
+        """Guaranteed permanent lapse: the light would be the firmware's all day."""
+        payload = default_config()
+        payload["settings"]["tick_seconds"] = 5
+        payload["settings"]["watchdog_millis"] = 5000
+        with self.assertRaises(ConfigError):
+            validate_config(payload)
+
+    def test_the_default_watchdog_survives_more_than_one_missed_tick(self) -> None:
+        """8000ms against a 5s tick left 3s of slack, which one slow tick spent."""
+        settings = default_config()["settings"]
+        self.assertGreaterEqual(
+            settings["watchdog_millis"] / 1000.0,
+            settings["tick_seconds"] * 2,
+        )
+
     def test_unknown_scene_reference_fails_validation(self) -> None:
         payload = default_config()
         payload["presets"]["bad"] = {"scene": "missing_scene"}
