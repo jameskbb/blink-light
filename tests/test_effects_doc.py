@@ -18,7 +18,7 @@ import unittest
 
 from blink_light.config import validate_config
 from blink_light.defaults import default_config, scene_duration_seconds
-from blink_light.device import BlinkDeviceController
+from blink_light.device import SERVERDOWN_PATTERN_LINE, BlinkDeviceController
 
 EFFECTS = Path(__file__).resolve().parents[1] / "docs" / "EFFECTS.md"
 
@@ -50,11 +50,11 @@ class EffectsDocTests(unittest.TestCase):
                 validate_config(config)
 
     def test_every_documented_scene_fits_the_device_pattern_memory(self) -> None:
-        # The page tells the reader to design under 32 steps; it should not
+        # The page tells the reader to design under 31 steps; it should not
         # then hand them a block that falls back to host playback.
         for name, scene in self.scenes.items():
             with self.subTest(scene=name):
-                self.assertLessEqual(len(scene["steps"]), 32)
+                self.assertLessEqual(len(scene["steps"]), SERVERDOWN_PATTERN_LINE)
 
     def test_the_sunrise_ramp_is_short_enough_to_be_the_daily_show(self) -> None:
         # The page offers it as a drop-in for show.scene, so it has to survive
@@ -69,11 +69,12 @@ class EffectsDocTests(unittest.TestCase):
         )
 
     def test_the_documented_step_limit_matches_the_devices_real_one(self) -> None:
-        # The 32 in the doc's limits table comes from here, not from folklore.
+        # The 31 in the doc's limits table comes from here, not from folklore:
+        # the device holds 32 lines and the last is reserved for serverdown.
         # Constructing the controller opens nothing; the device is lazy.
         device = BlinkDeviceController(serial=None)
-        over = {"loop": False, "steps": [{"color": "#000000", "seconds": 0.01}] * 33}
-        under = {"loop": False, "steps": [{"color": "#000000", "seconds": 0.01}] * 32}
+        over = {"loop": False, "steps": [{"color": "#000000", "seconds": 0.01}] * 32}
+        under = {"loop": False, "steps": [{"color": "#000000", "seconds": 0.01}] * 31}
         self.assertFalse(device.can_run_scene_on_device(over))
         self.assertTrue(device.can_run_scene_on_device(under))
 

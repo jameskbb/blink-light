@@ -9,6 +9,16 @@ import time
 from typing import Any
 
 
+# The blink(1) has 32 pattern lines in RAM, and the firmware answers a lapsed
+# watchdog by playing a sub-pattern of them on a loop. The library defaults that
+# sub-pattern to lines 0-16, which is exactly where a scene is written - so a
+# lapse replayed whichever notification went out last, at length, saying
+# something nobody meant. Keeping the last line permanently black and pointing
+# serverdown at that one instead means a lapse plays nothing. Which is the point:
+# a watchdog exists to notice a dead host, not to invent a signal.
+SERVERDOWN_PATTERN_LINE = 31
+
+
 class DeviceError(RuntimeError):
     """Raised for device selection and communication failures."""
 
@@ -28,6 +38,7 @@ class BlinkDeviceController:
         self._scene_thread: threading.Thread | None = None
         self._scene_stop = threading.Event()
         self._current_signature: str | None = None
+        self._serverdown_blanked = False
 
     @staticmethod
     def _blink1_class():
@@ -92,6 +103,9 @@ class BlinkDeviceController:
     def _forget_device(self) -> None:
         device, self._device = self._device, None
         self._current_signature = None
+        # Pattern RAM is reloaded from flash when the light powers up, so the
+        # next handle is talking to a device whose reserved line is not ours.
+        self._serverdown_blanked = False
         if device is not None:
             try:
                 device.close()
@@ -127,7 +141,16 @@ class BlinkDeviceController:
 
     def enable_watchdog(self, timeout_millis: int) -> None:
         with self._connected() as device:
-            device.server_tickle(True, int(timeout_millis), stay_lit=False)
+            if not self._serverdown_blanked:
+                device.write_pattern_line(0, "#000000", SERVERDOWN_PATTERN_LINE, 0)
+                self._serverdown_blanked = True
+            device.server_tickle(
+                True,
+                int(timeout_millis),
+                False,
+                SERVERDOWN_PATTERN_LINE,
+                SERVERDOWN_PATTERN_LINE,
+            )
 
     def disable_watchdog(self) -> None:
         with self._lock:
@@ -200,7 +223,8 @@ class BlinkDeviceController:
         return json.dumps(scene, sort_keys=True)
 
     def can_run_scene_on_device(self, scene: dict[str, Any]) -> bool:
-        return not scene.get("loop", False) and len(scene.get("steps", [])) <= 32
+        # One line short of the device's 32: the last belongs to serverdown.
+        return not scene.get("loop", False) and len(scene.get("steps", [])) <= SERVERDOWN_PATTERN_LINE
 
     def _load_scene_to_device(self, scene: dict[str, Any]) -> float:
         with self._connected() as device:
@@ -210,7 +234,7 @@ class BlinkDeviceController:
                 millis = int(float(step["seconds"]) * 1000)
                 total_seconds += float(step["seconds"])
                 device.write_pattern_line(millis, step["color"], index, step.get("led", 0))
-            for index in range(len(steps), 32):
+            for index in range(len(steps), SERVERDOWN_PATTERN_LINE + 1):
                 device.write_pattern_line(0, "#000000", index, 0)
             # Bound the play range to the real steps. Relying on end_pos=0 to
             # mean "the whole pattern" is firmware-dependent; naming the last

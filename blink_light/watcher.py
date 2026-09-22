@@ -321,14 +321,21 @@ def _run_watch_loop(
     calendar_down_since: datetime | None = None
     light_missing_since: datetime | None = None
     # A lapsed watchdog is not a quiet failure: the blink(1) firmware answers one
-    # by playing the pattern still loaded in its memory, which is whichever
-    # notification scene was written last. The light then repeats a flash nothing
-    # fired, and nothing in any log says why. Both of the tick's failure paths
-    # used to skip the re-arm - a bad calendar read `continue`d past it, and a
-    # DeviceError jumped over it - so the fault that stopped a tick also handed
-    # the light to the firmware. Re-arming is now its own step that runs whatever
-    # else failed, and a tick that genuinely cannot arm it says so.
+    # by playing a sub-pattern out of its own memory, unprompted, until the host
+    # speaks again. Both of the tick's failure paths used to skip the re-arm - a
+    # bad calendar read `continue`d past it, and a DeviceError jumped over it -
+    # so the fault that stopped a tick also handed the light to the firmware.
+    # Re-arming is now its own step that runs whatever else failed, and a tick
+    # that genuinely cannot arm it says so.
     watchdog_lapsed_since: datetime | None = None
+    # Refusals are only the lapses this process can see. The other kind is a tick
+    # that simply took too long - the calendar poll runs inline with a 20-second
+    # HTTP timeout against an 8-second watchdog - and it raises nothing, so
+    # elapsed time between feeds is the only witness. What the firmware plays is
+    # now blank (see SERVERDOWN_PATTERN_LINE), which is why this is worth
+    # noticing rather than fearing: the light goes dark for the stall, so the
+    # cached signature no longer describes it and the next tick has to repaint.
+    last_armed_at: datetime | None = None
 
     def rearm_watchdog(current: datetime) -> DeviceError | None:
         """Feed the watchdog, and report the device error if it could not be fed.
@@ -339,16 +346,44 @@ def _run_watch_loop(
         means, because an unplugged light and a light that is present but
         unreachable read the same here and want different log lines.
         """
-        nonlocal watchdog_lapsed_since
+        nonlocal watchdog_lapsed_since, last_armed_at
         try:
             controller.enable_watchdog(int(config["settings"]["watchdog_millis"]))
         except DeviceError as error:
             return error
+        last_armed_at = current
         if watchdog_lapsed_since is not None:
             seconds = round((current - watchdog_lapsed_since).total_seconds())
             LOGGER.info("Device watchdog re-armed after %ss unarmed", seconds)
             watchdog_lapsed_since = None
         return None
+
+    def note_watchdog_lapse(current: datetime) -> None:
+        """Report a gap between feeds longer than the watchdog allowed.
+
+        Runs at the top of the tick rather than beside the re-arm, and needs no
+        device: it is arithmetic on the last feed's timestamp, and its whole
+        purpose is to clear the cached signature *before* this tick decides
+        whether to repaint. Detecting it after the repaint step would leave the
+        light dark for one more tick, which is the fault it exists to end.
+        """
+        nonlocal last_signature
+        if last_armed_at is None:
+            return
+        window_seconds = float(config["settings"]["watchdog_millis"]) / 1000.0
+        unfed_seconds = (current - last_armed_at).total_seconds()
+        if unfed_seconds <= window_seconds:
+            return
+        # Logged per lapse, not once per run like the refusal above: each one is
+        # a separate stall and its duration is the whole diagnostic. A resumed
+        # laptop trips this too, and a repaint is what that wants as well.
+        LOGGER.warning(
+            "Device watchdog lapsed: %.1fs between feeds against a %.1fs window; "
+            "the light was the firmware's until now",
+            unfed_seconds,
+            window_seconds,
+        )
+        last_signature = None
 
     try:
         while True:
@@ -356,6 +391,7 @@ def _run_watch_loop(
                 stopped_by = "stop-file"
                 break
             current = now_factory()
+            note_watchdog_lapse(current)
             try:
                 calendar_snapshot = calendar_cache.get(current)
                 result = determine_action(

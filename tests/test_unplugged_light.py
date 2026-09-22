@@ -56,7 +56,10 @@ class FakeDesk:
                 self._write()
                 desk.colors.append(color)
 
-            def server_tickle(self, enable, timeout_millis=0, stay_lit=False) -> None:
+            def server_tickle(self, enable, timeout_millis=0, stay_lit=False, start_pos=0, end_pos=16) -> None:
+                self._write()
+
+            def write_pattern_line(self, fade_millis, color, position, ledn=0) -> None:
                 self._write()
 
             def stop(self) -> None:

@@ -48,16 +48,19 @@ forth quickly enough that it looks like motion. `rainbow_swirl` in
 `blink_light/defaults.py` is exactly this trick — alternating LEDs, held half a
 hue-turn apart.
 
-**5. Under 32 steps and non-looping, the device plays it; otherwise the host
-does.** `can_run_scene_on_device()` uploads scenes of 32 steps or fewer to the
+**5. Under 31 steps and non-looping, the device plays it; otherwise the host
+does.** `can_run_scene_on_device()` uploads scenes of 31 steps or fewer to the
 mk2/mk3's 32-line pattern memory
 ([tod's mk2 tricks](https://github.com/todbot/blink1/blob/main/docs/blink1-mk2-tricks.md)),
-so timing stays smooth while the machine is busy. Go over 32 steps, or set
+so timing stays smooth while the machine is busy. Go over 31 steps, or set
 `loop: true`, and playback falls back to a host thread issuing one fade per
-step — still correct, but subject to whatever else the CPU is doing. **32 steps
-is the line worth designing under.** (Only the first 16 lines survive a
-`--savepattern` to flash, but this repo never writes flash — it uploads to RAM
-on every play.)
+step — still correct, but subject to whatever else the CPU is doing. **31 steps
+is the line worth designing under.** The thirty-second line is spoken for: it
+is held blank as the serverdown pattern, so a lapsed watchdog plays nothing
+instead of replaying whichever scene was written last (see
+`SERVERDOWN_PATTERN_LINE` in `blink_light/device.py`). (Only the first 16 lines
+survive a `--savepattern` to flash, but this repo never writes flash — it
+uploads to RAM on every play.)
 
 Two smaller ones:
 
@@ -201,7 +204,7 @@ felt like dusk than like a party. Deep red climbing through orange to a washed
 warm yellow and back down, both LEDs together, ending on a clean fade to black
 so the watcher's repaint is not fighting a leftover glow.
 
-19 steps, 9.5s — inside both the 32-step device limit and `show.max_seconds`.
+19 steps, 9.5s — inside both the 31-step device limit and `show.max_seconds`.
 
 ```json
 "sunrise_show": {
@@ -231,7 +234,7 @@ so the watcher's repaint is not fighting a leftover glow.
 ```
 
 Point `show.scene` at it and re-validate. Note that a hand-written ramp like
-this is the awkward case for the 32-step limit: at 0.5s a step you get 19 steps
+this is the awkward case for the 31-step limit: at 0.5s a step you get 19 steps
 in 9.5s, but halve the step time for a smoother ramp and you need 38 steps,
 which pushes playback onto the host. That is the trade `rainbow_swirl` resolves
 by generating its steps in `defaults.py` rather than hand-listing them.
@@ -283,8 +286,11 @@ that this repo's `notify` events could serve without any code change:
 - **Server heartbeat** — blink1-tool's
   [`--servertickle`](https://github.com/todbot/blink1/blob/main/docs/blink1-tool-tips.md)
   makes the *device* play a stored pattern when the host stops checking in, so
-  the light reports a hung machine that could not possibly send a command. Not
-  wired up here, but it is the one effect a host-driven design cannot fake.
+  the light reports a hung machine that could not possibly send a command. This
+  repo arms that watchdog but aims it at a blank line, because a light that
+  invents a pattern nobody fired is worse than one that goes quiet — see
+  `SERVERDOWN_PATTERN_LINE`. Pointing it at a real scene is the version of this
+  effect worth having; nothing stops you.
 
 ---
 
@@ -292,7 +298,8 @@ that this repo's `notify` events could serve without any code change:
 
 | Limit | Value | Enforced by |
 | --- | --- | --- |
-| Steps playable on-device | 32 | `BlinkDeviceController.can_run_scene_on_device()` — over it, host playback |
+| Steps playable on-device | 31 | `BlinkDeviceController.can_run_scene_on_device()` — over it, host playback |
+| Pattern lines in RAM | 32 | Device firmware; the last is reserved for serverdown |
 | Pattern lines saved to flash | 16 | Device firmware; not used by this repo |
 | Daily show length | `show.max_seconds`, 10s | `config validate`, which reports the measured duration |
 | `repeat` | integer ≥ 1 | `config validate` |

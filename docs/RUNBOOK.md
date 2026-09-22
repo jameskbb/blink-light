@@ -343,6 +343,33 @@ whole thing off.
 An unplugged light is *not* one of the reasons; it keeps ticking and repaints
 when the light returns.
 
+### A flash nothing fired, repeating (often a dozen white blinks)
+
+Not a notification. The blink(1) has its own watchdog — the watcher arms it
+every tick with `settings.watchdog_millis` — and when the host stops feeding it
+the *firmware* takes over and plays a sub-pattern out of the device's memory,
+on a loop, until the host speaks again. Before the reserved line existed, that
+sub-pattern was lines 0-16, which is where scenes are uploaded, so a lapse
+replayed whichever effect went out last. After a top-of-hour chime that meant
+white on/off at 400 ms, for as long as the stall lasted.
+
+The usual stall is the calendar: the Graph poll runs inside the tick with a
+20-second HTTP timeout, against an 8-second watchdog. A laptop resuming from
+sleep does it too.
+
+Two things now happen instead. Serverdown is aimed at pattern line 31, which
+this repo keeps permanently black, so a lapse plays nothing. And the watcher
+notices the gap between feeds and says so, then repaints rather than leaving
+the light dark:
+
+```
+Device watchdog lapsed: 19.4s between feeds against a 8.0s window; the light was the firmware's until now
+```
+
+Seeing that line often means ticks are being starved — check the network path
+to Graph first. Seeing unexplained flashing *without* it means the cause is
+something other than the watchdog; start with the log.
+
 ### Duplicate pulses, or a light left on after an effect
 
 Should be impossible; every driver claims the slot under `slot.lock` before it
