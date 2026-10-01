@@ -54,6 +54,7 @@ For full first-time setup — installing the scheduled tasks, verifying the chim
 | [Integrating](docs/INSTRUCTIONS.md) | flash the light from your own script, bot, or agent — hand this page to it whole |
 | [Herdr](docs/HERDR.md) | make the light react when an AI coding agent finishes or gets blocked |
 | [My setup](docs/MY-SETUP.md) | see how the author runs it day to day |
+| [Reference card](docs/blink-light-reference-card.pdf) | print the colours and pin them above the desk (PDF, 2 pages) |
 
 ![What the light does section header: breathing, heartbeat, relay, and rainbow signals flow into a blink(1)](docs/images/readme-header-behaviour.png)
 
@@ -63,6 +64,11 @@ Everything a fresh install does, in one place. Values are the built-in defaults 
 [`blink_light/defaults.py`](blink_light/defaults.py), mirrored in
 [`blink-light.example.json`](blink-light.example.json); your own
 `blink-light.json` can override any of them.
+
+There is a printable version of this section:
+[`docs/blink-light-reference-card.pdf`](docs/blink-light-reference-card.pdf).
+Two pages, built from the same defaults by `tools/build_reference_card.py`, for
+pinning above the desk.
 
 ### On a schedule
 
@@ -637,6 +643,7 @@ watcher repaints the underlying state on its next tick.
 | `blink_light/watcher.py` | Background loop, action precedence. |
 | `blink_light/cli.py` | Argument parsing and command dispatch. |
 | `docs/` | Runbook, architecture, effects, the Herdr integration, and the author's setup. |
+| `tools/build_reference_card.py` | Builds the printable colour card from the defaults. Stdlib only. |
 | `tests/` | `unittest` suite, no hardware required. |
 
 ## Working on it

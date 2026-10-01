@@ -31,6 +31,11 @@ Nothing here is required. Every time and colour below is a setting, and the
 The calendar rows come from the watcher (`watch start`). Everything else runs
 from the scheduler loop.
 
+The same thing on paper, with every colour and hex on it, is
+[`blink-light-reference-card.pdf`](blink-light-reference-card.pdf). Because my
+config is the defaults bar two keys, the printed card is my setup as well as
+the shipped one.
+
 ## What's installed
 
 ```bat
