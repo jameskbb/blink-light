@@ -237,6 +237,31 @@ class CliTests(unittest.TestCase):
         self.assertEqual(payload["action"], {"scene": "agent_done_scene"})
         self.assertFalse(FakeController.applied_actions[-1]["persistent"])
 
+    def test_a_fired_notification_leaves_one_line_in_the_shared_log(self) -> None:
+        self._run(["config", "init"])
+        self._run(["notify", "run", "agent_done"])
+        self._run(["notify", "run", "agent_blocked"])
+
+        lines = [
+            line
+            for line in self.paths.log_path.read_text(encoding="utf-8").splitlines()
+            if "[notify]" in line
+        ]
+        self.assertEqual(len(lines), 2)
+        self.assertIn("Fired agent_done", lines[0])
+        self.assertIn("Fired agent_blocked", lines[1])
+
+    def test_a_notification_that_never_fired_leaves_no_line(self) -> None:
+        self._run(["config", "init"])
+        self._run(["notify", "run", "nope", "--quiet-missing"])
+
+        written = (
+            self.paths.log_path.read_text(encoding="utf-8")
+            if self.paths.log_path.exists()
+            else ""
+        )
+        self.assertNotIn("[notify]", written)
+
     def test_notify_run_rejects_an_unknown_event(self) -> None:
         self._run(["config", "init"])
         exit_code, _, error = self._run(["notify", "run", "nope"])

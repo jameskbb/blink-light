@@ -5,6 +5,8 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 import io
 import json
+import logging
+import os
 from pathlib import Path
 import sys
 from typing import Any, Callable
@@ -33,6 +35,7 @@ from .chime import (
 )
 from .alarms import alarm_status, fire_alarm, fire_due_alarms, find_alarm
 from .defaults import BUSY_STATUS_NAMES, PR_EVENTS, default_config
+from .log_file import close_log, open_log
 from .notify import NotifyError, fire_notify, list_events, resolve_event
 from .github import GitHubPoller, github_status
 from .show import fire_show, maybe_fire_show, show_status
@@ -304,6 +307,27 @@ def _calendar_upcoming(
         "firing_count": sum(1 for event in events if event["fires"]),
         "events": events,
     }
+
+
+def _log_notification(paths: AppPaths, event: str) -> None:
+    """Record one line per notification in the shared log.
+
+    Every other thing that lights the device - chime, show, alarm, watcher -
+    leaves a line behind, so a burst of light can be traced back to the calls
+    that caused it. `notify run` was the one silent path, which made "the light
+    flashed several times" impossible to tell apart from "one call flashed
+    several times". The PID is here because each notification is its own
+    short-lived process: repeated PIDs mean one caller, distinct ones mean
+    several. Logging must never cost a notification, so failures are ignored.
+    """
+    logger = logging.getLogger("blink_light.notify")
+    try:
+        open_log(logger, paths.log_path, "notify")
+        logger.info("Fired %s (PID %s)", event, os.getpid())
+    except OSError:
+        pass
+    finally:
+        close_log(logger)
 
 
 def _load_config(paths: AppPaths) -> dict[str, Any]:
@@ -893,6 +917,7 @@ def main(
                         _print_json(stream, {"notified": False, "event": args.event, "reason": "unknown-event"})
                         return 0
                     raise
+                _log_notification(resolved_paths, args.event)
                 _print_json(stream, payload)
                 return 0
 
