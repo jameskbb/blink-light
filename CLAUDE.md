@@ -1,4 +1,6 @@
-# Repository Agent Guide
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Windows-first Python utility that drives a `blink(1)` USB light on a desk: an
 hourly chime, a daily rainbow light show, named daily alarms (standup), AI-agent
@@ -28,7 +30,64 @@ free of anything identifying (no serials, IDs, meeting names or paths).
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
+One module, or one test:
+
+```bat
+.venv\Scripts\python.exe -m unittest tests.test_notify
+.venv\Scripts\python.exe -m unittest tests.test_cli.CliTests.test_notify_run_fires_the_named_event
+```
+
 Tests require no hardware or network. Device I/O and GitHub HTTP calls use mocks.
+There is no linter or formatter configured — the test suite is the only gate.
+
+## How the pieces fit
+
+`docs/ARCHITECTURE.md` is the full account. The orientation worth having before
+you read any module:
+
+**Three ways the light is driven, and they are independent.**
+
+| | Trigger | Dedupe | Lives in |
+|---|---|---|---|
+| Scheduler loop (`chime run`) | a time arrives | once per slot | `chime.py` |
+| Watcher (`watch start`) | state changed | once per distinct action | `watcher.py` |
+| Notify (`notify run <event>`) | someone asked | none — every call flashes | `notify.py` |
+
+The watcher paints *ongoing state* (are you in a meeting?); the scheduler fires
+*moments* (it is 5pm); a notification is a one-shot process with no daemon
+behind it. The scheduler loop also supervises the watcher, restarting one that
+has gone missing — so two long-lived processes exist, not one.
+
+Because two drivers can wake on the same second, a scheduled effect **claims**
+its slot under an OS lock before touching the device (`slot_lock.py`); the
+loser stands down. Never bypass that to "just fire it".
+
+**The device layer has two playback paths** (`device.py`). A short,
+non-looping scene is written into the blink(1)'s pattern RAM and played by the
+firmware in one `play()` call; anything looping or longer than 31 steps is
+played step-by-step from a host thread instead. `persistent=True` leaves the
+light in that state and dedupes against the last scene; `persistent=False`
+plays once and lets the watcher repaint. Which path a scene takes changes its
+timing and its failure modes, so check `can_run_scene_on_device` before
+blaming the firmware.
+
+Runtime state — pid files, locks, the once-per-slot dedupe files, the log —
+all lives in `%LOCALAPPDATA%\BlinkLight`, never in the repo.
+
+## Documentation generated from the defaults
+
+Five committed artefacts are derived from or checked against
+`blink_light/defaults.py`, each with a test that fails on drift. After changing
+a default, expect to update:
+
+- `blink-light.example.json` — must equal `default_config()` (`test_config.py`)
+- `README.md`'s "What the light does" table (`test_readme_schedule.py`)
+- `docs/EFFECTS.md` — every scene block is run through the real validator
+  (`test_effects_doc.py`)
+- `docs/INSTRUCTIONS.md` — handed to other agents verbatim, so every command
+  and exit code it names is checked against the CLI (`test_instructions_doc.py`)
+- `docs/blink-light-reference-card.pdf` — regenerate with
+  `.venv\Scripts\python.exe tools/build_reference_card.py` (`test_reference_card.py`)
 
 ## Shipping
 
