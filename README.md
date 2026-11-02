@@ -2,6 +2,13 @@
 
 ![Blink Light title card: a real blink(1) mk2 glows from a laptop USB port beside flowing notification signals](docs/images/readme-title-blink-light.png)
 
+<p align="center">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/jameskbb/blink-light?style=for-the-badge&label=License&color=blue"></a>
+  <a href="#requirements"><img alt="Python" src="https://img.shields.io/badge/Python-3.12%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="#requirements"><img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?style=for-the-badge"></a>
+  <a href="https://blink1.thingm.com/"><img alt="Hardware" src="https://img.shields.io/badge/Hardware-blink(1)-c8102e?style=for-the-badge"></a>
+</p>
+
 Turn a [`blink(1)`](https://blink1.thingm.com/) USB light into an ambient status display for your desk. It warns you before meetings and glows red while you're in one, chimes on the hour, plays a short rainbow at the end of the day, fires named daily alarms, and lights up when an AI coding agent finishes or gets stuck.
 
 Windows-first, written in Python, no admin rights needed. One batch file sets everything up.
