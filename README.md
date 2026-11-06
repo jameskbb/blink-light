@@ -14,7 +14,7 @@ Turn a [`blink(1)`](https://blink1.thingm.com/) USB light into an ambient status
 
 Windows-first, written in Python, no admin rights needed. One batch file sets everything up.
 
-> **The defaults are one person's working day**: standup alerts at 08:13, dark from 17:00. Change any of them in your own config (see [Config](#config)). [My setup](docs/MY-SETUP.md) shows how the author runs it and why.
+> **The defaults assume a working day**: standup alerts at 08:13, dark from 17:00. Change any of them in your own config (see [Config](#config)). [Example setup](docs/EXAMPLE-SETUP.md) walks through a day with the defaults and why they are shaped that way.
 
 ---
 
@@ -61,7 +61,7 @@ For full first-time setup (installing the scheduled tasks, verifying the chime a
 | [Effects](docs/EFFECTS.md) | design your own flashes, with pasteable scenes |
 | [Integrating](docs/INSTRUCTIONS.md) | flash the light from your own script, bot, or agent: hand this page to it whole |
 | [Herdr](docs/HERDR.md) | make the light react when an AI coding agent finishes or gets blocked |
-| [My setup](docs/MY-SETUP.md) | see how the author runs it day to day |
+| [Example setup](docs/EXAMPLE-SETUP.md) | see a complete day with the defaults, and what a real config changes |
 | [Reference card](docs/blink-light-reference-card.pdf) | print the colours and pin them above the desk (PDF, 2 pages) |
 
 ![What the light does section header: breathing, heartbeat, relay, and rainbow signals flow into a blink(1)](docs/images/readme-header-behaviour.png)
@@ -650,7 +650,7 @@ watcher repaints the underlying state on its next tick.
 | `integrations/herdr/` | Herdr plugin: manifest plus its event handler. |
 | `blink_light/watcher.py` | Background loop, action precedence. |
 | `blink_light/cli.py` | Argument parsing and command dispatch. |
-| `docs/` | Runbook, architecture, effects, the Herdr integration, and the author's setup. |
+| `docs/` | Runbook, architecture, effects, the Herdr integration, and an example setup. |
 | `tools/build_reference_card.py` | Builds the printable colour card from the defaults. Stdlib only. |
 | `tests/` | `unittest` suite, no hardware required. |
 

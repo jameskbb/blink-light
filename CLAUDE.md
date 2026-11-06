@@ -14,9 +14,10 @@ with pre-meeting warnings, GitHub notifications, timers, and local rules.
 `README.md` is the feature and command reference. `docs/ARCHITECTURE.md` and
 `docs/RUNBOOK.md` explain how scheduling works and how to operate it;
 `docs/EFFECTS.md` has scene-design ideas with pasteable JSON; `docs/INSTRUCTIONS.md`
-is handed to other agents verbatim. `docs/MY-SETUP.md` is the author's own
-schedule and setup: keep it in step with the defaults and free of anything
-identifying (no serials, IDs, meeting names or paths).
+is handed to other agents verbatim. `docs/EXAMPLE-SETUP.md` is a worked example
+built from the defaults: keep it in step with them and free of anything
+identifying (no names, serials, IDs, meeting names, paths, or anyone's real
+hours; it describes an example desk, not the author's).
 
 ## Install and run
 

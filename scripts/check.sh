@@ -16,10 +16,9 @@ fi
 echo "==> no em dashes in tracked files"
 # Built from its UTF-8 bytes so this script never contains the character.
 # git grep exits 0 on a match, 1 on none, anything else on an error.
-# docs/MY-SETUP.md is excluded until its next edit.
 em_dash=$'\xe2\x80\x94'
 status=0
-git grep -nIF -e "$em_dash" -- . ':(exclude)docs/MY-SETUP.md' || status=$?
+git grep -nIF -e "$em_dash" -- . || status=$?
 if [[ $status -eq 0 ]]; then
   echo "check: em dash (U+2014) found in the lines above" >&2
   exit 1
