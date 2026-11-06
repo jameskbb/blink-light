@@ -8,7 +8,7 @@ How blink-light decides what the light should do, and what it costs to add more.
 
 There is an always-running loop *and* a stateless hourly trigger. They do the same
 job by different means and cannot double-fire, because both *claim* the same
-slot-keyed state file before acting — see [Claiming a slot](#claiming-a-slot).
+slot-keyed state file before acting: see [Claiming a slot](#claiming-a-slot).
 
 The loop does **not** fire on minute change. It sleeps until the next scheduled
 moment, waking at least once a minute to re-check its arithmetic.
@@ -26,7 +26,7 @@ watcher paints *ongoing state* (are you in a meeting?). The scheduler fires
 *moments* (it is 5pm).
 
 Separate processes means one can die without the other noticing, and the watcher
-used to start only at logon — so a watcher killed at 08:14 left the calendar
+used to start only at logon, so a watcher killed at 08:14 left the calendar
 colours off for days while the chimes carried on as though nothing were wrong.
 The scheduler loop is already awake every minute, so it is also the watcher's
 supervisor: each wake it restarts a watcher that has gone missing (see
@@ -34,14 +34,14 @@ supervisor: each wake it restarts a watcher that has gone missing (see
 
 There is a third path with no process of its own: **notifications**. An external
 tool runs `notify run <event>`, the light flashes, the process exits. No slot, no
-dedupe, no daemon — see [Herdr](HERDR.md) for the shipped example. Three kinds of
+dedupe, no daemon: see [Herdr](HERDR.md) for the shipped example. Three kinds of
 trigger, then:
 
 | | Trigger | Dedupe |
 |---|---|---|
 | Scheduler | A time arrives | Once per slot |
 | Watcher | State changed | Once per distinct action |
-| Notify | Someone asked | None — every call flashes |
+| Notify | Someone asked | None: every call flashes |
 
 ## How the scheduler loop actually works
 
@@ -71,7 +71,7 @@ Three consequences worth internalising:
    is 50s away, so it sleeps 50.5s and wakes just past the hour. Measured latency
    in practice: **0.657s** after the slot.
 3. **The sleep is interruptible.** It is served in 2-second slices that check only
-   for the stop file — the effects are still evaluated once per wake, so
+   for the stop file: the effects are still evaluated once per wake, so
    responsiveness costs nothing on the hot path.
 
 The 60s cap exists so that a laptop resuming from sleep or a DST shift is noticed
@@ -81,7 +81,7 @@ within a minute rather than at the end of a 55-minute sleep.
 
 Reading the state file is not enough on its own. Two drivers that wake on the
 same second both read an unfired slot, both decide it is theirs, and their
-pattern writes interleave on one USB device — which is how a chime once flashed
+pattern writes interleave on one USB device, which is how a chime once flashed
 and then left the light stuck on.
 
 So a slot is *claimed*, not just checked. Under `slot.lock` (in the runtime
@@ -95,7 +95,7 @@ Three properties keep the lock from becoming its own outage
 - It is an OS lock on an open handle, so a killed loop leaves nothing stale.
 - Acquisition is non-blocking behind a 2s deadline; a driver that misses it
   stands down (`claimed-elsewhere`) rather than queueing behind the holder.
-- It is held across the claim only, never across the play — the daily show
+- It is held across the claim only, never across the play: the daily show
   holds the device for a minute and the lock for milliseconds.
 
 A claim whose effect never reached the light is handed back, so an unplugged
@@ -104,7 +104,7 @@ blink(1) is still retried for the rest of its catch-up window.
 ### Supervising the watcher
 
 One more thing on each wake, after the effects and the poll: is the watcher
-running? If not, start it — the same `watch start` the logon script runs.
+running? If not, start it: the same `watch start` the logon script runs.
 
 Three guards keep that from being a nuisance:
 
@@ -118,7 +118,7 @@ Three guards keep that from being a nuisance:
   every wake, and logged once per outage rather than once per attempt.
 
 `watch start` itself waits for the watcher's first heartbeat and reports
-whether it is *running*, never merely that a launch was issued — the CLI turns
+whether it is *running*, never merely that a launch was issued: the CLI turns
 a failure into a non-zero exit, because a launcher that always succeeds is how
 a watcher goes missing unnoticed.
 
@@ -176,7 +176,7 @@ it:
 
 That slicing is not cosmetic. `stop_chime_loop` waits 8 seconds for the loop to
 retire itself before resorting to a kill, and on Windows that kill is
-`TerminateProcess` — no cleanup, no shutdown log. With a single 60-second sleep the
+`TerminateProcess`: no cleanup, no shutdown log. With a single 60-second sleep the
 graceful path almost never won. With slices it reliably does: measured stop time is
 **1.1s**, and the shutdown is logged.
 
@@ -202,7 +202,7 @@ signal would be a scheduled-task result code. It logs to
 ```
 
 A failure in one effect is caught, logged, and stepped over rather than taking the
-loop down — one bad device call should not cost you the rest of the day's schedule.
+loop down: one bad device call should not cost you the rest of the day's schedule.
 Each alarm is attempted and reported on its own, so an unplugged light cannot
 hide one alarm's miss behind another's.
 
@@ -213,13 +213,13 @@ and looks for the light afresh on the next call.
 
 The watcher appends to the same file, tagged `[watcher]`, and both write UTF-8.
 It logs when it starts and stops (and why), when the light's action changes, and
-when the calendar stops or starts answering — a calendar error is not an
+when the calendar stops or starts answering: a calendar error is not an
 exception, so without that line meeting colours stopped silently. At a 5-second
 tick anything logged per tick would bury the scheduler's lines, so a fault that
 keeps failing ticks gets one traceback an hour and a line when it clears.
 
 The same rule holds for GitHub: one `poll 304 (unchanged)` line after start, a
-`poll 200`, or a logged error — not one a minute.
+`poll 200`, or a logged error, not one a minute.
 
 Neither process rotates the file while running. Windows will not rename a file
 another process holds open, so a size-triggered rotation would fail mid-run and
@@ -229,7 +229,7 @@ skipped and a later start tries again.
 
 ### Why a slot, not a timestamp
 
-Every effect resolves the current wall-clock time to a **slot** — the most recent
+Every effect resolves the current wall-clock time to a **slot**: the most recent
 scheduled moment at or before now.
 
 ```python
@@ -248,7 +248,7 @@ The slot is then checked against three gates before anything lights up:
 That last gate is what makes the design safe. The state file is keyed by slot, not
 by "last run time", so **any number of drivers can race and you still get exactly
 one pulse per hour.** The loop, the scheduled task, and the watcher can all be
-running at once — first one there wins, the rest no-op.
+running at once: first one there wins, the rest no-op.
 
 ## What it costs (measured on this machine)
 
@@ -278,7 +278,7 @@ whether the loop does one thing or fifty.
 
 ## So: will more logic make it heavier?
 
-Mostly no. The daily rainbow show is the proof — it was added to the existing loop
+Mostly no. The daily rainbow show is the proof: it was added to the existing loop
 and cost **zero** additional processes, zero additional wakes, and one extra JSON
 read per minute.
 
@@ -287,9 +287,9 @@ What actually costs something is *per-wake work*, and only some kinds:
 | You want to add | Where it goes | Cost |
 |---|---|---|
 | A new condition on existing signals (idle, process running, file exists, time range, battery) | `rules` in `blink-light.json` | **Zero.** No code. |
-| Another scheduled moment (a 9am pulse, a Friday show) | An entry in `alarms` | **Zero.** No code — this is what `alarms` is for. |
-| Reacting to system state continuously | The watcher | Moderate — 5s ticks, and `psutil` enumerates processes each one. |
-| Calendar network or COM access | The watcher, behind a cache | Outlook COM and Graph use the calendar poll interval, on a refresh thread of their own — a slow read must never spend a tick, because a tick that overruns `settings.watchdog_millis` hands the light to the blink(1)'s firmware. |
+| Another scheduled moment (a 9am pulse, a Friday show) | An entry in `alarms` | **Zero.** No code: this is what `alarms` is for. |
+| Reacting to system state continuously | The watcher | Moderate: 5s ticks, and `psutil` enumerates processes each one. |
+| Calendar network or COM access | The watcher, behind a cache | Outlook COM and Graph use the calendar poll interval, on a refresh thread of their own: a slow read must never spend a tick, because a tick that overruns `settings.watchdog_millis` hands the light to the blink(1)'s firmware. |
 | GitHub Actions failures and pull request activity | The scheduler, behind a 5s deadline | One conditional GET per ≥60s, plus one reviews GET per new update on your own pull request and one login GET per scheduler run, all inside the same budget. Measured: 1.512s for the first dry run, 0.897s for a cached-token HTTP 304 poll, 1.861s for the INT-02 dry run below. No extra permanent process. |
 | Reacting to an event from another tool | A `notify` event plus that tool's own hook | **Zero standing cost.** Nothing polls; the other tool pays for the trigger. |
 
@@ -302,7 +302,7 @@ file. Neither sample measures long-term CPU or memory use.
 
 INT-02 measurement (2026-09-10): a `github check --dry-run` on this same feed,
 after the pull-request code shipped but before the running loop's own state was
-upgraded, took **1.861s** and reported `pr_baseline: true` — expected, since that
+upgraded, took **1.861s** and reported `pr_baseline: true`: expected, since that
 state predates pull-request tracking. Baselining a state does not read reviews,
 so this sample measures the feed cost, not the reviews cost; the reviews GET has
 not yet been measured against the owner's live account.
@@ -334,7 +334,7 @@ tick. The watcher's own chain, highest first:
 | Path | Role |
 |---|---|
 | `blink_light/chime.py` | Hourly chime, the scheduler loop, scheduled-task management |
-| `blink_light/show.py` | Daily show — same slot/dedupe shape as the chime |
+| `blink_light/show.py` | Daily show: same slot/dedupe shape as the chime |
 | `blink_light/alarms.py` | Named daily alarms; reuses the show's slot arithmetic |
 | `blink_light/notify.py` | Named one-shot notifications; the integration entry point |
 | `blink_light/github.py` | Conditional GitHub polling, authentication, dedupe, status, and pull-request review detection |
@@ -348,7 +348,7 @@ tick. The watcher's own chain, highest first:
 ## Scenes and the 32-line limit
 
 A blink(1) stores up to **32 pattern lines** on the device. When a scene fits and
-does not loop, `device.py` uploads it and lets the hardware run it — no Python in
+does not loop, `device.py` uploads it and lets the hardware run it: no Python in
 the timing path, so playback is smooth even if the machine is busy. Scenes that
 loop, or exceed 32 lines, fall back to a host-driven thread.
 

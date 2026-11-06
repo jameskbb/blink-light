@@ -3,6 +3,7 @@
 ![Blink Light title card: a real blink(1) mk2 glows from a laptop USB port beside flowing notification signals](docs/images/readme-title-blink-light.png)
 
 <p align="center">
+  <a href="https://github.com/jameskbb/blink-light/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/jameskbb/blink-light/ci.yml?branch=main&style=for-the-badge&label=CI&logo=githubactions&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/jameskbb/blink-light?style=for-the-badge&label=License&color=blue"></a>
   <a href="#requirements"><img alt="Python" src="https://img.shields.io/badge/Python-3.12%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
   <a href="#requirements"><img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?style=for-the-badge"></a>
@@ -13,7 +14,7 @@ Turn a [`blink(1)`](https://blink1.thingm.com/) USB light into an ambient status
 
 Windows-first, written in Python, no admin rights needed. One batch file sets everything up.
 
-> **The defaults are one person's working day** — standup alerts at 08:13, dark from 17:00. Change any of them in your own config (see [Config](#config)). [My setup](docs/MY-SETUP.md) shows how the author runs it and why.
+> **The defaults are one person's working day**: standup alerts at 08:13, dark from 17:00. Change any of them in your own config (see [Config](#config)). [My setup](docs/MY-SETUP.md) shows how the author runs it and why.
 
 ---
 
@@ -34,7 +35,7 @@ cd blink-light
 blink-light.bat devices
 ```
 
-Everything runs through `blink-light.bat` from the repo root. The first run creates `.venv`, installs `requirements.txt`, then runs the command — there is no separate install step.
+Everything runs through `blink-light.bat` from the repo root. The first run creates `.venv`, installs `requirements.txt`, then runs the command: there is no separate install step.
 
 ## Quick Start
 
@@ -47,9 +48,9 @@ blink-light.bat status
 
 `devices` confirms the light is seen. `light color` proves it works. `config init` writes `blink-light.json`, auto-filling `device.serial` when exactly one device is connected. That file is yours: it is gitignored, so your serial and schedule stay on your machine. Without one, the built-in defaults apply. [`blink-light.example.json`](blink-light.example.json) shows every key at its default. `status` shows what the watcher would do right now.
 
-Running `blink-light.bat` with no arguments prints a welcome — or, if `calendar.enabled` and `calendar.auto_watch_on_launch` are both `true`, starts the background watcher immediately.
+Running `blink-light.bat` with no arguments prints a welcome or, if `calendar.enabled` and `calendar.auto_watch_on_launch` are both `true`, starts the background watcher immediately.
 
-For full first-time setup — installing the scheduled tasks, verifying the chime and show actually fire, troubleshooting — see the [Runbook](docs/RUNBOOK.md).
+For full first-time setup (installing the scheduled tasks, verifying the chime and show actually fire, troubleshooting), see the [Runbook](docs/RUNBOOK.md).
 
 ## Docs
 
@@ -57,8 +58,8 @@ For full first-time setup — installing the scheduled tasks, verifying the chim
 | --- | --- |
 | [Runbook](docs/RUNBOOK.md) | set up the scheduled tasks, check they fire, troubleshoot, or remove everything |
 | [Architecture](docs/ARCHITECTURE.md) | understand how the scheduling works, or add a feature |
-| [Effects](docs/EFFECTS.md) | design your own flashes — with pasteable scenes |
-| [Integrating](docs/INSTRUCTIONS.md) | flash the light from your own script, bot, or agent — hand this page to it whole |
+| [Effects](docs/EFFECTS.md) | design your own flashes, with pasteable scenes |
+| [Integrating](docs/INSTRUCTIONS.md) | flash the light from your own script, bot, or agent: hand this page to it whole |
 | [Herdr](docs/HERDR.md) | make the light react when an AI coding agent finishes or gets blocked |
 | [My setup](docs/MY-SETUP.md) | see how the author runs it day to day |
 | [Reference card](docs/blink-light-reference-card.pdf) | print the colours and pin them above the desk (PDF, 2 pages) |
@@ -81,8 +82,8 @@ pinning above the desk.
 
 | When | What | Colour | Length | Preview it |
 | --- | --- | --- | --- | --- |
-| **08:13** daily | Standup in 2 minutes — 3 flashes | 🟡 `#FFD700` gold | 0.96s | `alarm test standup_warning` |
-| **08:15** daily | Standup now — 6 faster flashes | 🟡 `#FFD700` gold | 1.44s | `alarm test standup_now` |
+| **08:13** daily | Standup in 2 minutes: 3 flashes | 🟡 `#FFD700` gold | 0.96s | `alarm test standup_warning` |
+| **08:15** daily | Standup now: 6 faster flashes | 🟡 `#FFD700` gold | 1.44s | `alarm test standup_now` |
 | **:00** every hour | One white breath | ⚪ `#FFFFFF` | 0.8s | `chime test` |
 | **17:00** daily | Rainbow swirl across both LEDs | 🌈 28 hues | 9.92s | `show test` |
 | **17:15** daily | The same rainbow again, for when you worked through the first one | 🌈 28 hues from `#730000` | 9.92s | `alarm test rainbow_encore` |
@@ -91,13 +92,13 @@ pinning above the desk.
 
 | Trigger | What | Colour | Length | Preview it |
 | --- | --- | --- | --- | --- |
-| AI agent finishes ([Herdr](docs/HERDR.md)) | One slow breath | 🔵 `#4FC3F7` — Herdr blue, full | 0.90s | `notify run agent_done` |
-| …and more agents are still waiting | One slow climb out of the dark | 🔵 `#14313E` → `#4FC3F7` — Herdr blue, 25% climbing to full | 1.12s | `notify run agent_done_more` |
-| AI agent blocked | 3 quicker breaths | 🔴 `#801E00` — dim red | 1.26s | `notify run agent_blocked` |
-| GitHub Actions run you triggered fails (opt-in) | 2 pairs of heartbeat thumps | 🟠 `#803C00` — dim orange-red | 2.40s | `notify run ci_failed` |
-| A pull request review is requested from you (opt-in) | A pulse handed from the top LED to the bottom, twice | 🟣 `#442C72` — dim violet | 2.24s | `notify run pr_review_requested` |
-| You're @mentioned on a pull request (opt-in) | A slow swell with a flicker at its peak, twice | 🟣 `#442C72` — dim violet | 2.56s | `notify run pr_mentioned` |
-| Someone reviews your pull request (opt-in) | A two-step climb, twice | 🟣 `#1B112E` — dimmer violet | 1.98s | `notify run pr_review_received` |
+| AI agent finishes ([Herdr](docs/HERDR.md)) | One slow breath | 🔵 `#4FC3F7` Herdr blue, full | 0.90s | `notify run agent_done` |
+| …and more agents are still waiting | One slow climb out of the dark | 🔵 `#14313E` → `#4FC3F7` Herdr blue, 25% climbing to full | 1.12s | `notify run agent_done_more` |
+| AI agent blocked | 3 quicker breaths | 🔴 `#801E00` dim red | 1.26s | `notify run agent_blocked` |
+| GitHub Actions run you triggered fails (opt-in) | 2 pairs of heartbeat thumps | 🟠 `#803C00` dim orange-red | 2.40s | `notify run ci_failed` |
+| A pull request review is requested from you (opt-in) | A pulse handed from the top LED to the bottom, twice | 🟣 `#442C72` dim violet | 2.24s | `notify run pr_review_requested` |
+| You're @mentioned on a pull request (opt-in) | A slow swell with a flicker at its peak, twice | 🟣 `#442C72` dim violet | 2.56s | `notify run pr_mentioned` |
+| Someone reviews your pull request (opt-in) | A two-step climb, twice | 🟣 `#1B112E` dimmer violet | 1.98s | `notify run pr_review_received` |
 | A new request lands in a queue you watch | A rainbow sweep across both LEDs | 🌈 12 hues from `#730000` | 2.46s | `notify run triage_request` |
 
 ### The resting colour (watcher only, opt-in)
@@ -109,12 +110,12 @@ returns to; everything above plays on top of it.
 | --- | --- |
 | Nothing scheduled | 🟢 `#00C853` green |
 | In a Busy or Tentative meeting | 🔴 `#D50000` red |
-| Meeting in 10 minutes | 🔵 `#00E5FF` cyan — 2 slow blinks |
-| Meeting in 5 minutes | 🟣 `#FF00C8` magenta — 4 quick blinks |
+| Meeting in 10 minutes | 🔵 `#00E5FF` cyan, 2 slow blinks |
+| Meeting in 5 minutes | 🟣 `#FF00C8` magenta, 4 quick blinks |
 | Idle 10+ minutes | 🔵 `#2962FF` blue |
 
 Meetings marked **Free**, **Out of Office** or **Working Elsewhere** are ignored
-entirely — no colour, no warning. Only `alert_statuses` (Tentative and Busy by
+entirely: no colour, no warning. Only `alert_statuses` (Tentative and Busy by
 default) moves the light.
 
 ### Telling them apart
@@ -135,7 +136,7 @@ The meeting warnings were yellow and orange until five different flashes ended
 up in that warm band at once; cyan and magenta are used by nothing else.
 
 A watcher that dies takes these colours with it and nothing else changes, so
-the scheduler restarts one that has gone missing — see
+the scheduler restarts one that has gone missing; see
 [Supervising the watcher](docs/ARCHITECTURE.md#supervising-the-watcher).
 `watch status` reports `running`, `paused` and `heartbeat_age_seconds`, and
 `watch start` exits non-zero if the watcher does not come up.
@@ -150,7 +151,7 @@ The two rainbows are what opt out. The show fires at exactly 17:00 and the
 window is inclusive of its start, so respecting quiet hours would retire the
 rainbow permanently; instead it still plays, as the last thing the light does
 before going dark. The `rainbow_encore` alarm at 17:15 opts out for the same
-reason — it is a second chance to catch the first one, so it has to reach into
+reason: it is a second chance to catch the first one, so it has to reach into
 the quiet window to be worth anything.
 
 Because 08:13 and 08:15 sit outside the window, the standup alerts are
@@ -166,7 +167,7 @@ blink-light.bat notify list
 ```
 
 Each prints `next_slot` and when it last fired, plus a `reason` when something is
-not going to fire. Nothing here fires twice for the same moment — see
+not going to fire. Nothing here fires twice for the same moment; see
 [Architecture](docs/ARCHITECTURE.md) for why.
 
 ## Hourly Chime
@@ -214,7 +215,7 @@ blink-light.bat show status
 scheduler loop as the chime, so nothing extra to install. It is a hue
 rotation, not a strobe: both LEDs stay half a turn apart in colour, and every
 step is a fade, brightness swelling from 45% to full and back before a clean
-fade to black — 29 steps, 9.92s, uploaded to the device so playback stays
+fade to black: 29 steps, 9.92s, uploaded to the device so playback stays
 smooth even when the machine is busy.
 
 | Key | Default | Meaning |
@@ -222,7 +223,7 @@ smooth even when the machine is busy.
 | `enabled` | `true` | Master switch. |
 | `at` | `"17:00"` | Time of day, `HH:MM`. |
 | `scene` | `"rainbow_swirl"` | Any non-looping scene in `scenes`. |
-| `max_seconds` | `10` | Hard cap, enforced at `config validate` time — not by truncating playback. A longer scene fails validation with its measured duration. |
+| `max_seconds` | `10` | Hard cap, enforced at `config validate` time, not by truncating playback. A longer scene fails validation with its measured duration. |
 | `catch_up_window_seconds` | `300` | How late a missed show may still play. |
 | `respect_quiet_hours` | `false` | Off by default here: 17:00 is the first minute of quiet hours, so respecting them would mean the show never plays. |
 
@@ -242,7 +243,7 @@ blink-light.bat alarm run <name>
 ```
 
 `test` plays one now without consuming today's slot; `run` consumes it.
-`alarm now` fires whatever is currently due — that is what the scheduler loop
+`alarm now` fires whatever is currently due: that is what the scheduler loop
 calls. Each alarm dedupes on its own key, so the 08:13 and 08:15 pair never
 swallow each other.
 
@@ -280,7 +281,7 @@ pair to skip weekends.
 
 ## Notifications
 
-One-shot named flashes for external tools. No slots, no dedupe — it fires
+One-shot named flashes for external tools. No slots, no dedupe: it fires
 whenever you call it.
 
 ```bat
@@ -301,13 +302,13 @@ event and the config decides how it looks:
 Add `--quiet-missing` for callers that must not fail when an event is
 undefined.
 
-There is **no server and no port** — the CLI verb is the whole interface. A
+There is **no server and no port**: the CLI verb is the whole interface. A
 tool triggers a flash by running a command, which means no daemon to keep
 alive, nothing listening on the machine, and no auth to get wrong. Calling it
-from your own tool is [a few lines](docs/INSTRUCTIONS.md) — that page is written
+from your own tool is [a few lines](docs/INSTRUCTIONS.md): that page is written
 to be handed to an agent whole.
 
-**Shipped integration:** [Herdr](docs/HERDR.md) — flashes when an AI agent
+**Shipped integration:** [Herdr](docs/HERDR.md) flashes when an AI agent
 finishes or gets blocked.
 
 ```bat
@@ -354,7 +355,7 @@ consuming the API rate limit. See [GitHub notifications](https://docs.github.com
 
 ## GitHub Pull Requests
 
-Rides on the same poll as GitHub Actions Failures above — one integration,
+Rides on the same poll as GitHub Actions Failures above: one integration,
 `github.enabled`, no second credential. All three pull-request toggles are on
 by default once GitHub polling is on.
 
@@ -362,14 +363,14 @@ What flashes:
 
 - A review is requested from you.
 - You're @mentioned, or team-mentioned, on a pull request.
-- Someone else reviews a pull request you authored — bots included.
+- Someone else reviews a pull request you authored, bots included.
 
 What does not flash: plain comments and pushes on your own pull request, your
 own review replies, logins in `ignore_logins`, mentions on issues, and the
 `subscribed`, `state_change`, `assign`, and `comment` notification reasons.
 
 **The unread rule.** A pull request thread that keeps the same reason flashes
-once, then stays quiet on later activity — it flashes again only once you've
+once, then stays quiet on later activity: it flashes again only once you've
 read it on GitHub, or once its reason changes (a `subscribed` thread that
 becomes a `mention`, say).
 
@@ -378,7 +379,7 @@ per new update on a pull request you authored, to tell a real review apart
 from a plain comment. It also reads your GitHub login once per scheduler run,
 cached in memory like the token. Both share the same 5-second budget as the
 feed request; a check the budget or a stop request cuts short is logged and
-never flashes — the next update tries again.
+never flashes: the next update tries again.
 
 The first poll after enabling this, or after upgrading from an Actions-only
 setup, records existing pull-request activity as a silent baseline, the same
@@ -422,7 +423,7 @@ pre-logon SYSTEM context can see. `disable` stops the running loop and removes
 the task; `--no-start` registers the task but waits for the next logon.
 
 Keep both `autostart enable` (the live runner) and `chime install` (the
-stateless backstop) — they cannot double-pulse, and together they cover a
+stateless backstop); they cannot double-pulse, and together they cover a
 dead loop or a machine asleep at the top of the hour. Both tasks are allowed
 to start on battery, so an undocked laptop still keeps the schedule. See
 [Architecture](docs/ARCHITECTURE.md#the-three-moving-parts) for why.
@@ -442,12 +443,12 @@ the resting-colour table above gets its data.
 
 | Provider | Reads | Setup |
 | --- | --- | --- |
-| `graph` | Your Microsoft 365 mailbox on the server — the same data the Outlook web app shows | One-time Entra app registration, then `calendar login` |
+| `graph` | Your Microsoft 365 mailbox on the server, the same data the Outlook web app shows | One-time Entra app registration, then `calendar login` |
 | `outlook` | The classic Outlook desktop client's local cache, over COM | None |
 
 **Use `graph` if you live in the Outlook web app.** The COM provider only sees
 what the classic desktop profile has cached locally, which can silently omit
-meetings — in particular ones you were invited to but did not organise. Graph
+meetings, in particular ones you were invited to but did not organise. Graph
 reads the mailbox itself, so what the light sees is what the web app sees.
 
 ### Signing in with Microsoft 365
@@ -457,7 +458,7 @@ depends on anyone else's tenant:
 
 1. Open [Entra app registrations](https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) → **New registration**. Name it `blink-light`, and under **Supported account types** pick *Accounts in this organizational directory only*.
 2. Under **Redirect URI**, choose **Public client/native** and enter `http://localhost`.
-3. Register, then copy the **Application (client) ID** and **Directory (tenant) ID** into `.env` (see Secrets below) — not into `blink-light.json`, which holds behaviour and gets shared as a template.
+3. Register, then copy the **Application (client) ID** and **Directory (tenant) ID** into `.env` (see Secrets below), not into `blink-light.json`, which holds behaviour and gets shared as a template.
 4. **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated** → `Calendars.Read` → Add. If your tenant requires it, click **Grant admin consent** (or ask an admin to).
 5. Fill in `.env`, set `"provider": "graph"` in `blink-light.json`, then run:
 
@@ -470,7 +471,7 @@ blink-light.bat calendar upcoming --hours 24
 
 `calendar login` opens a browser, falling back to a device code if it cannot,
 and caches the refresh token at
-`%LOCALAPPDATA%\BlinkLight\graph-token-cache.json` — outside the repo, so it
+`%LOCALAPPDATA%\BlinkLight\graph-token-cache.json`, outside the repo, so it
 cannot be committed by accident. `calendar logout` removes it. The only scope
 requested is `Calendars.Read`; the light never writes to your calendar.
 
@@ -507,7 +508,7 @@ Credentials never live in the repo. Three layers enforce that:
 | --- | --- |
 | `.env` (gitignored) | Where ids and credentials actually live. `.env.template` documents the keys and is the only `.env.*` file that is committed. |
 | `.gitignore` | Ignores `.env`, `blink-light.json`, `*.local.json`, `*token-cache*.json`, `*.token`. |
-| `.githooks/pre-commit` | Blocks a commit that stages one of those files — even with `git add -f` — or that adds a credential-shaped value to any file. |
+| `.githooks/pre-commit` | Blocks a commit that stages one of those files (even with `git add -f`) or that adds a credential-shaped value to any file. |
 
 Install the hook once per clone:
 
@@ -589,8 +590,8 @@ blink-light.bat startup status
 Your config file is `blink-light.json` in the repo root. It is machine-local:
 `.gitignore` excludes it and the secret scan refuses to let it be committed, so
 a device serial or a personal schedule cannot end up in a push. Start from
-[`blink-light.example.json`](blink-light.example.json) — exactly what
-`config init` writes with no device attached — or leave the file out and run on
+[`blink-light.example.json`](blink-light.example.json) (exactly what
+`config init` writes with no device attached), or leave the file out and run on
 the built-in defaults.
 
 You only need the keys you want to change. The file is merged over the
@@ -660,7 +661,7 @@ git config core.hooksPath .githooks
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-The suite needs no hardware — device I/O is mocked — and runs in about five
+The suite needs no hardware (device I/O is mocked) and runs in about five
 seconds. It also checks the docs against the code: the schedule tables above
 must match the defaults, and `blink-light.example.json` must equal
 `default_config()`. Change a default and the suite tells you which docs to

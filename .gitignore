@@ -16,3 +16,8 @@ blink-light.local.json
 *token-cache*.json
 *.token
 .env
+
+# Agent and planning state that stays on this machine.
+.planning/
+.claude/settings.local.json
+.claude/worktrees/

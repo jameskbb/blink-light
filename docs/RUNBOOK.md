@@ -49,7 +49,7 @@ checks above; the three `github.pr` toggles are on by default once that is on.
    `pr_matches`, `would_flash`, `review_checks_skipped`, and
    `review_skip_reasons`.
 3. Run `blink-light.bat github test --event review_requested`,
-   `--event mentioned`, or `--event review_received` to play each scene once —
+   `--event mentioned`, or `--event review_received` to play each scene once:
    2.24, 2.56, and 1.98 seconds.
 4. After a config change, run `blink-light.bat autostart enable` to restart the
    scheduler.
@@ -59,14 +59,14 @@ checks above; the three `github.pr` toggles are on by default once that is on.
 
 The first poll after enabling this, or after upgrading a running install that
 only had Actions failures on, records existing pull-request activity as a
-silent baseline — the same shape as the Actions baseline above.
+silent baseline: the same shape as the Actions baseline above.
 
 | Result | Cause | Action |
 | --- | --- | --- |
 | A review did not flash | It was your own reply, the login is in `ignore_logins`, it was submitted during quiet hours or before the baseline, the thread's reason was no longer `author`, or the check was skipped | Check `review_skip_reasons`, or wait for the next update |
-| Repeated activity did not flash | The thread is unread and kept its reason | Expected — read it on GitHub, or wait for the reason to change |
+| Repeated activity did not flash | The thread is unread and kept its reason | Expected: read it on GitHub, or wait for the reason to change |
 | `review_skip_reasons` shows `time budget`, `stop requested`, `login unavailable`, `review read failed`, or `unexpected pull request URL` | The 5-second budget, a scheduler stop, or a failed request cut the check short | Wait for the next update, or check the network and `gh auth status` |
-| Mentions on issues do not flash | By design — only pull request mentions do | Not a bug |
+| Mentions on issues do not flash | By design: only pull request mentions do | Not a bug |
 
 ## 1. Setup from scratch
 
@@ -81,7 +81,7 @@ blink-light.bat devices
 ```
 
 An empty list means Windows is not enumerating the blink(1). Unplug and replug it
-before touching anything else — no amount of config fixes a device that is not
+before touching anything else: no amount of config fixes a device that is not
 there.
 
 ### 1.2 Write the config
@@ -135,7 +135,7 @@ The four things to check:
 | Field | Expected |
 |---|---|
 | `autostart.installed` | `true` |
-| `autostart.loop.running` | `true` — a live loop with a PID |
+| `autostart.loop.running` | `true`: a live loop with a PID |
 | `scheduled_task.installed` | `true` |
 | `next_slot` | the coming hour |
 
@@ -201,7 +201,7 @@ without consuming the slot, so it will not stop the real one firing.
 | `quiet-hours` | Inside `settings.quiet_hours`. |
 | `disabled` | `enabled: false`. |
 
-**After editing alarms, restart the runner** — it reads config once at startup:
+**After editing alarms, restart the runner.** It reads config once at startup:
 
 ```bat
 blink-light.bat autostart enable
@@ -223,7 +223,7 @@ type %LOCALAPPDATA%\BlinkLight\blink-light.log
 ```
 
 A `Loop started` with no matching `Loop stopped` means it is still running. A
-stack trace means an effect failed — the loop logs and carries on rather than
+stack trace means an effect failed: the loop logs and carries on rather than
 dying, so one bad device call does not cost you the day's schedule.
 
 The watcher writes to the same file, tagged `[watcher]`:
@@ -251,25 +251,25 @@ traceback:
 08:15:01 INFO [chime] Alarm standup_now skipped, device not connected: Configured blink(1) serial '12ab34cd' is not connected.
 ```
 
-One line per effect per hour — the chime, the show and each alarm get their
-own — however many times the catch-up window retries that slot, so a missed
+One line per effect per hour (the chime, the show and each alarm get their
+own), however many times the catch-up window retries that slot, so a missed
 standup is visible even when the chime already noted the light was gone.
 It is a note, not a fault: plug the light back in and the next slot chimes.
 Anything that is *not* a missing device still gets its full stack trace, which
-is the point — the tracebacks left in the log are the ones worth reading.
+is the point: the tracebacks left in the log are the ones worth reading.
 
 ### The light does nothing at the top of the hour
 
 Work down this list:
 
-1. `blink-light.bat devices` — is the device enumerated at all?
-2. `blink-light.bat chime status` — is `enabled` true, and is `reason` something
+1. `blink-light.bat devices`: is the device enumerated at all?
+2. `blink-light.bat chime status`: is `enabled` true, and is `reason` something
    other than `due`?
-3. `reason: "quiet-hours"` — expected between 17:00 and 07:00. Set
+3. `reason: "quiet-hours"`: expected between 17:00 and 07:00. Set
    `chime.respect_quiet_hours` to `false` to chime overnight anyway.
-4. `reason: "already-fired"` — something already chimed this hour. Working as
+4. `reason: "already-fired"`: something already chimed this hour. Working as
    intended.
-5. `reason: "outside-catch-up-window"` — the machine was asleep or off through the
+5. `reason: "outside-catch-up-window"`: the machine was asleep or off through the
    slot and is now more than 5 minutes late. Raise
    `chime.catch_up_window_seconds` if you would rather have a late pulse.
 
@@ -280,7 +280,7 @@ blink-light.bat autostart status
 ```
 
 `installed: true` with `loop.running: false` means the task exists but the loop
-died. Check the log for why, then re-run `autostart enable` — it is idempotent and
+died. Check the log for why, then re-run `autostart enable`: it is idempotent and
 restarts cleanly.
 
 `autostart enable` reports `started_now` only after it has confirmed the loop
@@ -296,7 +296,7 @@ doing its job:
 ### The watcher is not running (calendar colours stopped)
 
 The light still chimes, because the chime and the watcher are separate
-processes — so a watcher that died looks like nothing at all until you notice
+processes: so a watcher that died looks like nothing at all until you notice
 the light never turns red for a meeting.
 
 ```bat
@@ -316,7 +316,7 @@ blink-light.bat watch start
 ```
 
 It waits to see the watcher actually come up and **exits non-zero if it did
-not** — the JSON carries an `error` field pointing at the log. Nothing here
+not**: the JSON carries an `error` field pointing at the log. Nothing here
 reports success for a launch it did not confirm.
 
 **What restarts it on its own.** The scheduler loop checks every wake (≤60s)
@@ -326,8 +326,8 @@ and restarts a watcher that has gone missing, logging:
 09:14:58 INFO [watcher] Watcher was not running; restarted it (PID 24140)
 ```
 
-That check runs only when `startup enable` has been done — supervision
-restarts the watcher you asked to autostart, not one nobody configured — and
+That check runs only when `startup enable` has been done (supervision
+restarts the watcher you asked to autostart, not one nobody configured) and
 never when `paused` is set, so a deliberate `watch stop` stays stopped until
 the next `watch start`. A watcher that will not start is retried every 5
 minutes and logged once per outage, not once per attempt:
@@ -339,14 +339,14 @@ minutes and logged once per outage, not once per attempt:
 Set `settings.supervise_watcher` to `false` in `blink-light.json` to turn the
 whole thing off.
 
-**If it keeps dying**, read the log first — the watcher logs why it stopped.
+**If it keeps dying**, read the log first: the watcher logs why it stopped.
 An unplugged light is *not* one of the reasons; it keeps ticking and repaints
 when the light returns.
 
 ### A flash nothing fired, repeating (often a dozen white blinks)
 
-Not a notification. The blink(1) has its own watchdog — the watcher arms it
-every tick with `settings.watchdog_millis` — and when the host stops feeding it
+Not a notification. The blink(1) has its own watchdog (the watcher arms it
+every tick with `settings.watchdog_millis`), and when the host stops feeding it
 the *firmware* takes over and plays a sub-pattern out of the device's memory,
 on a loop, until the host speaks again. Before the reserved line existed, that
 sub-pattern was lines 0-16, which is where scenes are uploaded, so a lapse
@@ -356,7 +356,7 @@ white on/off at 400 ms, for as long as the stall lasted.
 The stall used to be the calendar: the Graph poll ran inside the tick with a
 20-second HTTP timeout, against an 8-second watchdog. It now refreshes on its
 own thread, so a slow read cannot spend the tick, and the default window is
-15000 ms — three ticks, where 8000 left less than one. A laptop resuming from
+15000 ms: three ticks, where 8000 left less than one. A laptop resuming from
 sleep still trips it, and always will.
 
 Three things now happen instead. Serverdown is aimed at pattern line 31, which
@@ -369,7 +369,7 @@ Device watchdog lapsed: 19.4s between feeds against a 8.0s window; the light was
 ```
 
 Seeing that line often means ticks are being starved by something other than
-the calendar — check machine load, and whether `settings.watchdog_millis` in
+the calendar: check machine load, and whether `settings.watchdog_millis` in
 your `blink-light.json` still pins the old 8000. Seeing unexplained flashing
 *without* it means the cause is something other than the watchdog; start with
 the log.
@@ -378,7 +378,7 @@ the log.
 
 Should be impossible; every driver claims the slot under `slot.lock` before it
 touches the device, so the loser of a race finds the slot already fired. If you
-do see doubles, check whether two *repo checkouts* are installed — they would
+do see doubles, check whether two *repo checkouts* are installed: they would
 have different `project_root` paths but write to the same
 `%LOCALAPPDATA%\BlinkLight`.
 
@@ -428,7 +428,7 @@ Then `blink-light.bat autostart enable` for a clean single runner.
 ### Console windows flashing
 
 The scheduled tasks run through `.vbs` launchers specifically to suppress this. A
-visible console means a task is pointing at a `.bat` directly — re-run
+visible console means a task is pointing at a `.bat` directly: re-run
 `autostart enable` / `chime install` to repoint it.
 
 ---
@@ -461,7 +461,7 @@ Recorded so the setup can be rebuilt or audited without reading the source.
 Both are per-user tasks created with `schtasks`, so neither needs administrator
 rights, and both invoke a `.vbs` launcher that hides the console window.
 
-**BlinkLight Autostart** — the runner.
+**BlinkLight Autostart**: the runner.
 
 ```
 schtasks /Create /TN "BlinkLight Autostart"
@@ -475,10 +475,10 @@ in your session; the pre-logon SYSTEM context is the wrong place for it.
 The launcher *waits* on the loop rather than firing and forgetting. That keeps the
 task action alive for the life of the loop, which makes Task Scheduler's default
 "do not start a new instance" policy a real duplicate guard. The loop's own PID
-file is the stronger guard underneath it — Task Scheduler cannot protect against a
+file is the stronger guard underneath it: Task Scheduler cannot protect against a
 loop it has lost track of.
 
-**BlinkLight Hourly Chime** — the stateless backstop.
+**BlinkLight Hourly Chime**: the stateless backstop.
 
 ```
 schtasks /Create /TN "BlinkLight Hourly Chime"
